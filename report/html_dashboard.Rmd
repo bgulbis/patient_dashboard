@@ -1,0 +1,74 @@
+---
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(DT)
+library(sparkline)
+
+raw <- list.files("../data/raw", full.names = TRUE) 
+data_patients <- read_excel(raw, sheet = "Patients", skip = 2, col_names = c("millennium.id", "age", "gender")) 
+data_labs <- read_excel(raw, sheet = "Labs", skip = 2, col_names = c("millennium.id", "lab.datetime", "lab", "lab.result"))
+data_meds <- read_excel(raw, sheet = "Meds", skip = 2, col_names = c("millennium.id", "med.datetime", "med", "dose"))
+```
+
+```{r}
+df <- data_labs %>%
+    filter(floor_date(lab.datetime, unit = "day") >= ymd(today()) - days(3)) %>%
+    mutate(lab.drawn = difftime(lab.datetime, now(), units = "hours")) %>%
+    group_by(millennium.id, lab) %>%
+    arrange(lab.datetime, .by_group = TRUE) %>%
+    unite(x_y, lab.drawn, lab.result, sep = ":") %>%
+    summarize_at("x_y", funs(paste(., collapse = ","))) %>%
+    spread(lab, x_y) %>%
+    right_join(data_patients, by = "millennium.id") %>%
+    select(millennium.id, age, gender, everything())
+
+colDefs1 <- list(
+    list(targets = c(1, 2), width = '30px'),
+    list(targets = 3, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_scr>' + data + '</span>' }")),
+    list(targets = 4, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_hgb>' + data + '</span>' }")),
+    list(targets = 5, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_plt>' + data + '</span>' }")),
+    list(targets = 6, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_wbc>' + data + '</span>' }"))
+)
+
+line_string <- "type: 'line', width: '50px', lineColor: 'black', fillColor: false, highlightLineColor: 'orange', highlightSpotColor: 'orange'"
+
+normal_scr <- c(0.5, 1.4)
+normal_wbc <- c(3.7, 10.4)
+normal_hgb <- c(14.0, 18.0)
+normal_plt <- c(133, 450)
+
+range_scr <- c(0.5, 2.5)
+range_wbc <- c(4, 20)
+range_hgb <- c(7, 12)
+range_plt <- c(50, 300)
+
+cb_line <- JS(paste0("function (oSettings, json) { $('.spark_scr:not(:has(canvas))').sparkline('html', { ", 
+    line_string, ", normalRangeMin: ", normal_scr[1], ", normalRangeMax: ", normal_scr[2], " });\n $('.spark_hgb:not(:has(canvas))').sparkline('html', { ", 
+    line_string, ", normalRangeMin: ", normal_hgb[1], ", normalRangeMax: ", normal_hgb[2], " });\n $('.spark_plt:not(:has(canvas))').sparkline('html', { ", 
+    line_string, ", normalRangeMin: ", normal_plt[1], ", normalRangeMax: ", normal_plt[2], " });\n $('.spark_wbc:not(:has(canvas))').sparkline('html', { ", 
+    line_string, ", normalRangeMin: ", normal_wbc[1], ", normalRangeMax: ", normal_wbc[2], " });}"), 
+    collapse = "")
+
+d1 <- datatable(df, 
+                rownames = FALSE, 
+                colnames = c("Patient", "Age", "Gender", "SCr", "Hgb", "Plt", "WBC"),
+                options = list(
+                    pageLength = 20,
+                    columnDefs = colDefs1, 
+                    fnDrawCallback = cb_line))
+
+d1$dependencies <- append(d1$dependencies, htmlwidgets:::getDependency("sparkline"))
+
+d1
+```
+
