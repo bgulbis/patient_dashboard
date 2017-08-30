@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 library(tidyverse)
 library(readxl)
 library(lubridate)
+library(stringr)
 library(DT)
 library(sparkline)
 
@@ -22,7 +23,7 @@ data_vitals <- read_excel(raw, sheet = "Vitals", skip = 2, col_names = c("millen
 ```
 
 ```{r}
-df <- data_labs %>%
+df_spark <- data_labs %>%
     filter(floor_date(lab.datetime, unit = "day") >= ymd(today()) - days(3),
            lab %in% c("Creatinine Lvl", "Hgb", "Platelet", "WBC")) %>%
     mutate(lab.drawn = difftime(lab.datetime, now(), units = "hours")) %>%
@@ -30,16 +31,48 @@ df <- data_labs %>%
     arrange(lab.datetime, .by_group = TRUE) %>%
     unite(x_y, lab.drawn, lab.result, sep = ":") %>%
     summarize_at("x_y", funs(paste(., collapse = ","))) %>%
-    spread(lab, x_y) %>%
-    right_join(data_patients, by = "millennium.id") %>%
-    select(millennium.id, age, gender, los, everything())
+    spread(lab, x_y) 
+
+df_alert <- data_labs %>%
+    filter(floor_date(lab.datetime, unit = "day") >= ymd(today()) - days(2),
+           lab %in% c("AST", "ALT", "Lactic Acid Lvl", "POC A LA")) %>%
+    mutate_at("lab.result", as.numeric) %>%
+    mutate_at("lab", str_replace_all, pattern = "Lactic Acid Lvl|POC A LA", replacement = "LA") %>%
+    spread(lab, lab.result) %>%
+    filter(AST >= 300 | ALT >= 300 | LA >= 4) %>%
+    unite(alert, AST:LA, sep = ",")
+
+vital_names <- c("Arterial Systolic BP 1" = "SBP",
+                 "Systolic Blood Pressure" = "SBP",
+                 "Respiratory Rate" = "RR",
+                 "Glasgow Coma Score" = "GCS")
+
+df_qsofa <- data_vitals %>%
+    filter(floor_date(vital.datetime, unit = "day") >= ymd(today()) - days(1)) %>%
+    mutate_at("vital.result", as.numeric) %>%
+    mutate_at("vital", str_replace_all, pattern = vital_names) %>%
+    select(-vital.units) %>%
+    group_by(millennium.id, vital.datetime, vital) %>%
+    summarize_at("vital.result", min) %>%
+    spread(vital, vital.result) %>%
+    group_by(millennium.id) %>%
+    fill(GCS) %>%
+    group_by(millennium.id) %>%
+    summarize_at(c("SBP", "RR", "GCS"), c("min", "max"), na.rm = TRUE) %>%
+    group_by(millennium.id) %>%
+    mutate(qsofa = sum(SBP_min <= 100, RR_max >= 22, GCS_min < 15, na.rm = TRUE)) %>%
+    select(millennium.id, qsofa)
+    
+df <- data_patients %>%
+    left_join(df_qsofa, by = "millennium.id") %>%
+    left_join(df_spark, by = "millennium.id")
 
 colDefs1 <- list(
-    list(targets = seq(1, 3, 1), width = '30px'),
-    list(targets = 4, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_scr>' + data + '</span>' }")),
-    list(targets = 5, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_hgb>' + data + '</span>' }")),
-    list(targets = 6, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_plt>' + data + '</span>' }")),
-    list(targets = 7, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_wbc>' + data + '</span>' }"))
+    list(targets = seq(1, 4, 1), width = '30px'),
+    list(targets = 5, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_scr>' + data + '</span>' }")),
+    list(targets = 6, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_hgb>' + data + '</span>' }")),
+    list(targets = 7, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_plt>' + data + '</span>' }")),
+    list(targets = 8, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_wbc>' + data + '</span>' }"))
 )
 
 line_string <- "type: 'line', width: '50px', lineColor: 'black', fillColor: false, highlightLineColor: 'orange', highlightSpotColor: 'orange'"
@@ -59,7 +92,7 @@ cb_line <- JS(paste0("function (oSettings, json) { $('.spark_scr:not(:has(canvas
 d1 <- datatable(df, 
                 caption = paste("CVICU", format(Sys.Date(), "%B %d, %Y"), sep = " - "),
                 rownames = FALSE, 
-                colnames = c("Patient", "Age", "Gender", "LOS", "SCr", "Hgb", "Plt", "WBC"),
+                colnames = c("Patient", "Age", "Gender", "LOS", "qSOFA", "SCr", "Hgb", "Plt", "WBC"),
                 options = list(
                     pageLength = 20,
                     columnDefs = colDefs1, 
