@@ -16,7 +16,7 @@ library(DT)
 library(sparkline)
 
 raw <- list.files("../data/raw", full.names = TRUE) 
-data_patients <- read_excel(raw, sheet = "Patients", skip = 2, col_names = c("millennium.id", "age", "gender", "los")) 
+data_patients <- read_excel(raw, sheet = "Patients", skip = 2, col_names = c("millennium.id", "name", "age", "gender", "los")) 
 data_labs <- read_excel(raw, sheet = "Labs", skip = 2, col_names = c("millennium.id", "lab.datetime", "lab", "lab.result"))
 data_meds <- read_excel(raw, sheet = "Meds", skip = 2, col_names = c("millennium.id", "med.datetime", "med", "dose", "dose.units"))
 data_vitals <- read_excel(raw, sheet = "Vitals", skip = 2, col_names = c("millennium.id", "vital.datetime", "vital", "vital.result", "vital.units"))
@@ -73,7 +73,8 @@ df_qsofa <- data_vitals %>%
 df <- data_patients %>%
     left_join(df_qsofa, by = "millennium.id") %>%
     left_join(df_spark, by = "millennium.id") %>%
-    left_join(df_alert, by = "millennium.id")
+    left_join(df_alert, by = "millennium.id") %>%
+    select(-millennium.id)
 
 colDefs1 <- list(
     list(targets = seq(1, 4, 1), width = '30px'),
