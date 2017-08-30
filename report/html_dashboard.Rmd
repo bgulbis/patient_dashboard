@@ -39,8 +39,15 @@ df_alert <- data_labs %>%
     mutate_at("lab.result", as.numeric) %>%
     mutate_at("lab", str_replace_all, pattern = "Lactic Acid Lvl|POC A LA", replacement = "LA") %>%
     spread(lab, lab.result) %>%
+    group_by(millennium.id) %>%
+    summarize_at(c("ALT", "AST", "LA"), max, na.rm = TRUE) %>%
+    group_by(millennium.id) %>%
     filter(AST >= 300 | ALT >= 300 | LA >= 4) %>%
-    unite(alert, AST:LA, sep = ",")
+    mutate_at("ALT", funs(if_else(. >= 300, "ALT", ""))) %>%
+    mutate_at("AST", funs(if_else(. >= 300, "AST", ""))) %>%
+    mutate_at("LA", funs(if_else(. >= 4, "LA", ""))) %>%
+    unite(alerts, ALT:LA, sep = ",") %>%
+    mutate_at("alerts", str_replace_all, pattern = ",,|^,", "")
 
 vital_names <- c("Arterial Systolic BP 1" = "SBP",
                  "Systolic Blood Pressure" = "SBP",
@@ -65,14 +72,16 @@ df_qsofa <- data_vitals %>%
     
 df <- data_patients %>%
     left_join(df_qsofa, by = "millennium.id") %>%
-    left_join(df_spark, by = "millennium.id")
+    left_join(df_spark, by = "millennium.id") %>%
+    left_join(df_alert, by = "millennium.id")
 
 colDefs1 <- list(
     list(targets = seq(1, 4, 1), width = '30px'),
     list(targets = 5, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_scr>' + data + '</span>' }")),
     list(targets = 6, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_hgb>' + data + '</span>' }")),
     list(targets = 7, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_plt>' + data + '</span>' }")),
-    list(targets = 8, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_wbc>' + data + '</span>' }"))
+    list(targets = 8, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_wbc>' + data + '</span>' }")),
+    list(targest = 9, width = '30px')
 )
 
 line_string <- "type: 'line', width: '50px', lineColor: 'black', fillColor: false, highlightLineColor: 'orange', highlightSpotColor: 'orange'"
@@ -92,7 +101,7 @@ cb_line <- JS(paste0("function (oSettings, json) { $('.spark_scr:not(:has(canvas
 d1 <- datatable(df, 
                 caption = paste("CVICU", format(Sys.Date(), "%B %d, %Y"), sep = " - "),
                 rownames = FALSE, 
-                colnames = c("Patient", "Age", "Gender", "LOS", "qSOFA", "SCr", "Hgb", "Plt", "WBC"),
+                colnames = c("Patient", "Age", "Gender", "LOS", "qSOFA", "SCr", "Hgb", "Plt", "WBC", "Alerts"),
                 options = list(
                     pageLength = 20,
                     columnDefs = colDefs1, 
