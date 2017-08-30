@@ -15,11 +15,15 @@ library(stringr)
 library(DT)
 library(sparkline)
 
+update_time <- list.files("../data/raw") %>%
+    str_replace_all("cvicu_dashboard_|\\.xlsx", "") %>%
+    ymd_hms()
 raw <- list.files("../data/raw", full.names = TRUE) 
 data_patients <- read_excel(raw, sheet = "Patients", skip = 2, col_names = c("millennium.id", "name", "age", "gender", "los")) 
 data_labs <- read_excel(raw, sheet = "Labs", skip = 2, col_names = c("millennium.id", "lab.datetime", "lab", "lab.result"))
 data_meds <- read_excel(raw, sheet = "Meds", skip = 2, col_names = c("millennium.id", "med.datetime", "med", "dose", "dose.units"))
 data_vitals <- read_excel(raw, sheet = "Vitals", skip = 2, col_names = c("millennium.id", "vital.datetime", "vital", "vital.result", "vital.units"))
+data_temps <- read_excel(raw, sheet = "Temps", skip = 2, col_names = c("millennium.id", "vital.datetime", "vital", "vital.result", "vital.units"))
 ```
 
 ```{r}
@@ -52,7 +56,22 @@ df_alert <- data_labs %>%
 vital_names <- c("Arterial Systolic BP 1" = "SBP",
                  "Systolic Blood Pressure" = "SBP",
                  "Respiratory Rate" = "RR",
-                 "Glasgow Coma Score" = "GCS")
+                 "Glasgow Coma Score" = "GCS",
+                 "Apical Heart Rate" = "HR")
+
+df_vitals <- data_vitals %>%
+    filter(floor_date(vital.datetime, unit = "day") >= ymd(today()) - days(1)) %>%
+    mutate_at("vital.result", as.numeric) %>%
+    mutate_at("vital", str_replace_all, pattern = vital_names) %>%
+    filter(vital %in% c("SBP", "HR")) %>%
+    select(-vital.units) %>%
+    mutate(vital.drawn = difftime(vital.datetime, now(), units = "hours")) %>%
+    group_by(millennium.id, vital) %>%
+    arrange(vital.datetime, .by_group = TRUE) %>%
+    unite(x_y, vital.drawn, vital.result, sep = ":") %>%
+    summarize_at("x_y", funs(paste(., collapse = ","))) %>%
+    spread(vital, x_y) %>%
+    select(millennium.id, SBP, HR)
 
 df_qsofa <- data_vitals %>%
     filter(floor_date(vital.datetime, unit = "day") >= ymd(today()) - days(1)) %>%
@@ -62,6 +81,7 @@ df_qsofa <- data_vitals %>%
     group_by(millennium.id, vital.datetime, vital) %>%
     summarize_at("vital.result", min) %>%
     spread(vital, vital.result) %>%
+    select(-HR) %>%
     group_by(millennium.id) %>%
     fill(GCS) %>%
     group_by(millennium.id) %>%
@@ -70,19 +90,35 @@ df_qsofa <- data_vitals %>%
     mutate(qsofa = sum(SBP_min <= 100, RR_max >= 22, GCS_min < 15, na.rm = TRUE)) %>%
     select(millennium.id, qsofa)
     
+df_temps <- data_temps %>%
+    filter(vital.datetime >= now() - hours(24),
+           vital.units == "DegF") %>%
+    mutate_at("vital.result", as.numeric) %>%
+    group_by(millennium.id) %>%
+    summarize_at("vital.result", max)
+
 df <- data_patients %>%
+    mutate_at("gender", str_extract, pattern = "^M|^F") %>%
+    # mutate_at("los", round, digits = 1) %>%
+    # unite("demographics", age:los, sep = " ")
     left_join(df_qsofa, by = "millennium.id") %>%
+    left_join(df_temps, by = "millennium.id") %>%
     left_join(df_spark, by = "millennium.id") %>%
+    left_join(df_vitals, by = "millennium.id") %>%
     left_join(df_alert, by = "millennium.id") %>%
     select(-millennium.id)
 
+i <- 5
+
 colDefs1 <- list(
-    list(targets = seq(1, 4, 1), width = '30px'),
-    list(targets = 5, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_scr>' + data + '</span>' }")),
-    list(targets = 6, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_hgb>' + data + '</span>' }")),
-    list(targets = 7, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_plt>' + data + '</span>' }")),
-    list(targets = 8, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_wbc>' + data + '</span>' }")),
-    list(targest = 9, width = '30px')
+    list(targets = seq(1, i, 1), width = '20px'),
+    list(targets = i + 1, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_scr>' + data + '</span>' }")),
+    list(targets = i + 2, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_hgb>' + data + '</span>' }")),
+    list(targets = i + 3, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_plt>' + data + '</span>' }")),
+    list(targets = i + 4, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_wbc>' + data + '</span>' }")),
+    list(targets = i + 5, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_sbp>' + data + '</span>' }")),
+    list(targets = i + 6, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_hr>' + data + '</span>' }")),
+    list(targest = i + 7, width = '30px')
 )
 
 line_string <- "type: 'line', width: '50px', lineColor: 'black', fillColor: false, highlightLineColor: 'orange', highlightSpotColor: 'orange'"
@@ -91,18 +127,22 @@ normal_scr <- c(0.5, 1.4)
 normal_wbc <- c(3.7, 10.4)
 normal_hgb <- c(14.0, 18.0)
 normal_plt <- c(133, 450)
+normal_sbp <- c(90, 140)
+normal_hr <- c(60, 100)
 
 cb_line <- JS(paste0("function (oSettings, json) { $('.spark_scr:not(:has(canvas))').sparkline('html', { ", 
     line_string, ", normalRangeMin: ", normal_scr[1], ", normalRangeMax: ", normal_scr[2], " });\n $('.spark_hgb:not(:has(canvas))').sparkline('html', { ", 
     line_string, ", normalRangeMin: ", normal_hgb[1], ", normalRangeMax: ", normal_hgb[2], " });\n $('.spark_plt:not(:has(canvas))').sparkline('html', { ", 
     line_string, ", normalRangeMin: ", normal_plt[1], ", normalRangeMax: ", normal_plt[2], " });\n $('.spark_wbc:not(:has(canvas))').sparkline('html', { ", 
-    line_string, ", normalRangeMin: ", normal_wbc[1], ", normalRangeMax: ", normal_wbc[2], " });}"), 
+    line_string, ", normalRangeMin: ", normal_wbc[1], ", normalRangeMax: ", normal_wbc[2], " });\n $('.spark_sbp:not(:has(canvas))').sparkline('html', { ", 
+    line_string, ", normalRangeMin: ", normal_sbp[1], ", normalRangeMax: ", normal_sbp[2], " });\n $('.spark_hr:not(:has(canvas))').sparkline('html', { ", 
+    line_string, ", normalRangeMin: ", normal_hr[1], ", normalRangeMax: ", normal_hr[2], " });}"), 
     collapse = "")
 
 d1 <- datatable(df, 
-                caption = paste("CVICU", format(Sys.Date(), "%B %d, %Y"), sep = " - "),
+                caption = paste0("CVICU - Updated: ", format(update_time, "%B %d, %Y at %I:%M %p")),
                 rownames = FALSE, 
-                colnames = c("Patient", "Age", "Gender", "LOS", "qSOFA", "SCr", "Hgb", "Plt", "WBC", "Alerts"),
+                colnames = c("Patient", "Age", "Sex", "LOS", "qSOFA", "Tmax", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "Alerts"),
                 options = list(
                     pageLength = 20,
                     columnDefs = colDefs1, 
