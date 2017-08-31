@@ -131,7 +131,7 @@ line_string <- "type: 'line', width: '50px', lineColor: 'black', fillColor: fals
 
 normal_scr <- c(0.5, 1.4)
 normal_wbc <- c(3.7, 10.4)
-normal_hgb <- c(14.0, 18.0)
+normal_hgb <- c(8.5, 10.0) #14-18
 normal_plt <- c(133, 450)
 normal_sbp <- c(90, 140)
 normal_hr <- c(60, 100)
