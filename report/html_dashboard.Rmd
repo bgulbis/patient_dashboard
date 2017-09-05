@@ -50,6 +50,8 @@ df_alert <- data_labs %>%
            lab %in% c("AST", "ALT", "Lactic Acid Lvl", "POC A LA")) %>%
     mutate_at("lab.result", as.numeric) %>%
     mutate_at("lab", str_replace_all, pattern = "Lactic Acid Lvl|POC A LA", replacement = "LA") %>%
+    group_by(millennium.id, lab.datetime, lab) %>%
+    summarize_at("lab.result", max, na.rm = TRUE) %>%
     spread(lab, lab.result) %>%
     group_by(millennium.id) %>%
     summarize_at(c("ALT", "AST", "LA"), max, na.rm = TRUE) %>%
@@ -59,7 +61,7 @@ df_alert <- data_labs %>%
     mutate_at("AST", funs(if_else(. >= 300, "AST", ""))) %>%
     mutate_at("LA", funs(if_else(. >= 4, "LA", ""))) %>%
     unite(alerts, ALT:LA, sep = ",") %>%
-    mutate_at("alerts", str_replace_all, pattern = ",,|^,", "")
+    mutate_at("alerts", str_replace_all, pattern = ",,|^,|,$", "")
 
 vital_names <- c("Arterial Systolic BP 1" = "SBP",
                  "Systolic Blood Pressure" = "SBP",
