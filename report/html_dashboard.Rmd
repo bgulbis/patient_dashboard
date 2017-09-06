@@ -45,23 +45,61 @@ df_spark <- data_labs %>%
     summarize_at("x_y", funs(paste(., collapse = ","))) %>%
     spread(lab, x_y) 
 
+df_measures <- data_measures %>%
+    mutate_at("measure.result", as.numeric) %>%
+    mutate_at("measure", str_to_lower) %>%
+    filter((measure == "weight" & measure.units == "kg") | 
+               (measure == "height" & measure.units == "cm"),
+           !is.na(measure.result)) %>%
+    arrange(millennium.id, measure, desc(measure.datetime)) %>%
+    distinct(millennium.id, measure, .keep_all = TRUE) %>%
+    select(millennium.id, measure, measure.result) %>%
+    spread(measure, measure.result)
+
+hd <- c("Hemodialysis Output Volume", "Hemodialysis Output Vol")
+crrt <- "CRRT Output Vol"
+pd <- c("Peritoneal Dialysis Output Vol", "Peritoneal Dialysis Output Volume")
+
+df_uop <- data_uop %>%
+    mutate_at("uop.result", as.numeric) %>%
+    filter(floor_date(uop.datetime, unit = "day")  >= ymd(today()) - days(2),
+           !(uop %in% c(hd, crrt, pd))) %>%
+    mutate(uop_hr = floor_date(uop.datetime, unit = "hour"),
+           uop_date = if_else(hour(uop_hr) <= 7, floor_date(uop_hr - days(1), unit = "day"), floor_date(uop_hr, unit = "day"))) %>%
+    group_by(millennium.id, uop_date) %>%
+    summarize_at("uop.result", sum, na.rm = TRUE) %>%
+    left_join(df_measures, by = "millennium.id") %>%
+    mutate(uop_rate = uop.result / weight / 24) %>%
+    filter(uop_date == today() - days(1)) %>%
+    select(millennium.id, uop_rate)
+
+dialysis <- c("Hemodialysis Output Volume" = "HD", 
+              "Hemodialysis Output Vol" = "HD",
+              "CRRT Output Vol" = "CRRT",
+              "Peritoneal Dialysis Output Vol" = "PD",
+              "Peritoneal Dialysis Output Volume" = "PD")
+
+df_dialysis <- data_uop %>%
+    filter(floor_date(uop.datetime, unit = "day")  >= ymd(today()) - days(2),
+           (uop %in% c(hd, crrt, pd))) %>%
+    mutate_at("uop", str_replace_all, pattern = dialysis) %>%
+    distinct(millennium.id, uop) %>%
+    rename(alert = uop)
+
 df_alert <- data_labs %>%
     filter(floor_date(lab.datetime, unit = "day") >= ymd(today()) - days(2),
            lab %in% c("AST", "ALT", "Lactic Acid Lvl", "POC A LA")) %>%
     mutate_at("lab.result", as.numeric) %>%
     mutate_at("lab", str_replace_all, pattern = "Lactic Acid Lvl|POC A LA", replacement = "LA") %>%
-    group_by(millennium.id, lab.datetime, lab) %>%
+    group_by(millennium.id, lab) %>%
     summarize_at("lab.result", max, na.rm = TRUE) %>%
-    spread(lab, lab.result) %>%
+    filter((lab == "AST" & lab.result >= 300) |
+               (lab == "ALT" & lab.result >= 300) |
+               (lab == "LA" & lab.result >= 4)) %>%
+    rename(alert = lab) %>%
+    bind_rows(df_dialysis) %>%
     group_by(millennium.id) %>%
-    summarize_at(c("ALT", "AST", "LA"), max, na.rm = TRUE) %>%
-    group_by(millennium.id) %>%
-    filter(AST >= 300 | ALT >= 300 | LA >= 4) %>%
-    mutate_at("ALT", funs(if_else(. >= 300, "ALT", ""))) %>%
-    mutate_at("AST", funs(if_else(. >= 300, "AST", ""))) %>%
-    mutate_at("LA", funs(if_else(. >= 4, "LA", ""))) %>%
-    unite(alerts, ALT:LA, sep = ",") %>%
-    mutate_at("alerts", str_replace_all, pattern = ",,|^,|,$", "")
+    summarize_at("alert", str_c, collapse = ",")
 
 vital_names <- c("Arterial Systolic BP 1" = "SBP",
                  "Systolic Blood Pressure" = "SBP",
@@ -106,34 +144,6 @@ df_temps <- data_temps %>%
     mutate_at("vital.result", as.numeric) %>%
     group_by(millennium.id) %>%
     summarize_at("vital.result", max)
-
-df_measures <- data_measures %>%
-    mutate_at("measure.result", as.numeric) %>%
-    mutate_at("measure", str_to_lower) %>%
-    filter((measure == "weight" & measure.units == "kg") | 
-               (measure == "height" & measure.units == "cm"),
-           !is.na(measure.result)) %>%
-    arrange(millennium.id, measure, desc(measure.datetime)) %>%
-    distinct(millennium.id, measure, .keep_all = TRUE) %>%
-    select(millennium.id, measure, measure.result) %>%
-    spread(measure, measure.result)
-
-hd <- c("Hemodialysis Output Volume", "Hemodialysis Output Vol")
-crrt <- "CRRT Output Vol"
-pd <- c("Peritoneal Dialysis Output Vol", "Peritoneal Dialysis Output Volume")
-
-df_uop <- data_uop %>%
-    mutate_at("uop.result", as.numeric) %>%
-    filter(floor_date(uop.datetime, unit = "day")  >= ymd(today()) - days(2),
-           !(uop %in% c(hd, crrt, pd))) %>%
-    mutate(uop_hr = floor_date(uop.datetime, unit = "hour"),
-           uop_date = if_else(hour(uop_hr) <= 7, floor_date(uop_hr - days(1), unit = "day"), floor_date(uop_hr, unit = "day"))) %>%
-    group_by(millennium.id, uop_date) %>%
-    summarize_at("uop.result", sum, na.rm = TRUE) %>%
-    left_join(df_measures, by = "millennium.id") %>%
-    mutate(uop_rate = uop.result / weight / 24) %>%
-    filter(uop_date == today() - days(1)) %>%
-    select(millennium.id, uop_rate)
 
 df <- data_patients %>%
     mutate_at("gender", str_extract, pattern = "^M|^F") %>%
@@ -185,6 +195,7 @@ d1 <- datatable(df,
                 options = list(
                     fixedHeader = TRUE,
                     pageLength = 20,
+                    order = list(list(0, 'asc')),
                     columnDefs = colDefs1, 
                     fnDrawCallback = cb_line)) %>%
     formatRound("los", 1) %>%
