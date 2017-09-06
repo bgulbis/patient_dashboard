@@ -57,7 +57,7 @@ df_measures <- data_measures %>%
     spread(measure, measure.result)
 
 hd <- c("Hemodialysis Output Volume", "Hemodialysis Output Vol")
-crrt <- "CRRT Output Vol"
+crrt <- c("CRRT Output Vol", "CRRT Actual Pt Fluid Removed Vol")
 pd <- c("Peritoneal Dialysis Output Vol", "Peritoneal Dialysis Output Volume")
 
 df_uop <- data_uop %>%
@@ -76,6 +76,7 @@ df_uop <- data_uop %>%
 dialysis <- c("Hemodialysis Output Volume" = "HD", 
               "Hemodialysis Output Vol" = "HD",
               "CRRT Output Vol" = "CRRT",
+              "CRRT Actual Pt Fluid Removed Vol" = "CRRT",
               "Peritoneal Dialysis Output Vol" = "PD",
               "Peritoneal Dialysis Output Volume" = "PD")
 
