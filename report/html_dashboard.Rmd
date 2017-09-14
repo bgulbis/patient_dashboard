@@ -27,7 +27,7 @@ update_time <- list.files("../data/raw") %>%
 raw <- list.files("../data/raw", full.names = TRUE) 
 data_patients <- read_excel(raw, sheet = "Patients", skip = 2, col_names = c("millennium.id", "name", "age", "gender", "los")) 
 data_labs <- read_excel(raw, sheet = "Labs", skip = 2, col_names = c("millennium.id", "lab.datetime", "lab", "lab.result"))
-data_meds <- read_excel(raw, sheet = "Meds", skip = 2, col_names = c("millennium.id", "med.datetime", "med", "dose", "dose.units"))
+data_meds <- read_excel(raw, sheet = "Meds", skip = 2, col_names = c("millennium.id", "med.datetime", "med", "dose", "dose.units", "route", "rate", "rate.units", "infuse.actions"))
 data_vitals <- read_excel(raw, sheet = "Vitals", skip = 2, col_names = c("millennium.id", "vital.datetime", "vital", "vital.result", "vital.units"))
 data_temps <- read_excel(raw, sheet = "Temps", skip = 2, col_names = c("millennium.id", "vital.datetime", "vital", "vital.result", "vital.units"))
 data_uop <- read_excel(raw, sheet = "UOP", skip = 2, col_names = c("millennium.id", "uop.datetime", "uop", "uop.result", "uop.units"))
@@ -106,7 +106,12 @@ vital_names <- c("Arterial Systolic BP 1" = "SBP",
                  "Systolic Blood Pressure" = "SBP",
                  "Respiratory Rate" = "RR",
                  "Glasgow Coma Score" = "GCS",
-                 "Apical Heart Rate" = "HR")
+                 "Apical Heart Rate" = "HR",
+                 "POC A PO2" = "PO2",
+                 "POC A %FIO2" = "FIO2",
+                 "FIO2 \\(%\\)" = "FIO2",
+                 "Mean Arterial Pressure (Invasive)" = "MAP",
+                 "Mean Arterial Pressure" = "MAP")
 
 df_vitals <- data_vitals %>%
     filter(floor_date(vital.datetime, unit = "day") >= ymd(today()) - days(1)) %>%
@@ -121,6 +126,136 @@ df_vitals <- data_vitals %>%
     summarize_at("x_y", funs(paste(., collapse = ","))) %>%
     spread(vital, x_y) %>%
     select(millennium.id, SBP, HR)
+
+sofa_vitals <- data_vitals %>%
+    filter(floor_date(vital.datetime, unit = "day") >= ymd(today()) - hours(24)) %>%
+    mutate_at("vital.result", as.numeric) %>%
+    mutate_at("vital", str_replace_all, pattern = vital_names) %>%
+    filter(vital %in% c("MAP", "GCS")) %>%
+    group_by(millennium.id, vital) %>%
+    summarize_at("vital.result", "min") %>%
+    spread(vital, vital.result) %>%
+    mutate_at("GCS", funs(case_when(. < 6 ~ 4,
+                                    . <= 9 ~ 3,
+                                    . <= 12 ~ 2,
+                                    . <= 14 ~ 1,
+                                    TRUE ~ 0))) %>%
+    mutate_at("MAP", funs(case_when(. < 70 ~ 1,
+                                    TRUE ~ 0)))
+
+sofa_vent <- data_measures %>%
+    filter(floor_date(measure.datetime, unit = "day") >= ymd(today()) - hours(24),
+           measure == "Invasive Ventilation Mode") %>%
+    distinct(millennium.id) %>%
+    mutate(vent = TRUE)
+
+sofa_resp <- data_vitals %>%
+    filter(floor_date(vital.datetime, unit = "day") >= ymd(today()) - hours(24)) %>%
+    mutate_at("vital.result", as.numeric) %>%
+    mutate_at("vital", str_replace_all, pattern = vital_names) %>%
+    filter(vital %in% c("PO2", "FIO2")) %>%
+    select(-vital.units) %>%
+    group_by(millennium.id, vital.datetime, vital) %>%
+    summarize_at("vital.result", funs(vital_min = min, vital_max = max)) %>%
+    group_by(millennium.id, vital.datetime, vital) %>%
+    mutate(vital.result = if_else(vital == "PO2", vital_min, vital_max)) %>%
+    select(-vital_min, -vital_max) %>%
+    spread(vital, vital.result) %>%
+    group_by(millennium.id) %>%
+    arrange(vital.datetime, .by_group = TRUE) %>%
+    fill(FIO2) %>%
+    mutate(ratio = PO2 / (FIO2 / 100)) %>%
+    filter(!is.na(ratio)) %>%
+    summarize_at("ratio", "min") %>%
+    left_join(sofa_vent, by = "millennium.id") %>%
+    mutate(resp_score = case_when(ratio < 100 & vent ~ 4,
+                             ratio < 200 & vent ~ 3,
+                             ratio < 300 ~ 2,
+                             ratio < 400 ~ 1,
+                             TRUE ~ 0)) %>%
+    select(millennium.id, resp_score)
+
+labs <- c("Creatinine Lvl" = "scr",
+          "Platelet" = "plt", 
+          "Bili Total" = "bili")
+
+sofa_labs <- data_labs %>%
+    filter(floor_date(lab.datetime, unit = "day") >= ymd(today()) - hours(24),
+           lab %in% c("Creatinine Lvl", "Platelet", "Bili Total")) %>%
+    mutate_at("lab", str_replace_all, pattern = labs) %>%
+    mutate_at("lab.result", as.numeric) %>%
+    group_by(millennium.id, lab.datetime) %>%
+    spread(lab, lab.result) %>%
+    group_by(millennium.id) %>%
+    summarize_at(c("scr", "plt", "bili"), funs(min, max)) %>%
+    select(millennium.id, scr_max, plt_min, bili_max) %>%
+    mutate_at("scr_max", funs(case_when(. >= 5 ~ 4,
+                                        . >= 3.5 ~ 3,
+                                        . >= 2 ~ 2,
+                                        . >= 1.2 ~ 1,
+                                        TRUE ~ 0))) %>%
+    mutate_at("plt_min", funs(case_when(. < 20 ~ 4,
+                                        . < 50 ~ 3,
+                                        . < 100 ~ 2,
+                                        . < 150 ~ 1,
+                                        TRUE ~ 0))) %>%
+    mutate_at("bili_max", funs(case_when(. >= 12 ~ 4,
+                                         . >= 6 ~ 3,
+                                         . >= 2 ~ 2,
+                                         . >= 1.2 ~ 1,
+                                         TRUE ~ 0)))
+    
+sofa_uop <- data_uop %>%
+    mutate_at("uop.result", as.numeric) %>%
+    filter(floor_date(uop.datetime, unit = "day")  >= ymd(today()) - days(2),
+           !(uop %in% c(hd, crrt, pd))) %>%
+    mutate(uop_hr = floor_date(uop.datetime, unit = "hour"),
+           uop_date = if_else(hour(uop_hr) <= 7, 
+                              floor_date(uop_hr - days(1), unit = "day"), 
+                              floor_date(uop_hr, unit = "day"))) %>%
+    group_by(millennium.id, uop_date) %>%
+    summarize_at("uop.result", sum, na.rm = TRUE) %>%
+    filter(uop_date == ymd(today() - days(1))) %>%
+    mutate_at("uop.result", funs(case_when(. < 200 ~ 4,
+                                           . < 500 ~ 3,
+                                           TRUE ~ 0))) %>%
+    select(millennium.id, uop.result)
+
+sofa_meds <- data_meds %>%
+    mutate_at("med", str_to_lower) %>%
+    filter(floor_date(med.datetime, unit = "day") >= ymd(today()) - hours(24),
+           med %in% c("dopamine", "dobutamine", "epinephrine", "norepinephrine"),
+           !is.na(rate.units),
+           rate > 0) %>%
+    left_join(df_measures, by = "millennium.id") %>%
+    mutate(rate_kg = if_else(rate.units == "microgram/min", rate / weight, rate)) %>%
+    group_by(millennium.id, med) %>%
+    summarize_at("rate_kg", funs(rate_max = max)) %>%
+    mutate_at("med", factor, levels = c("dopamine", "dobutamine", "epinephrine", "norepinephrine")) %>%
+    spread(med, rate_max, drop = FALSE, fill = 0) %>%
+    mutate_at("dopamine", funs(case_when(. > 15 ~ 4,
+                                         . > 5 ~ 3,
+                                         . > 0 ~ 2,
+                                         TRUE ~ 0))) %>%
+    mutate_at("dobutamine", funs(case_when(. > 0 ~ 2,
+                                           TRUE ~ 0))) %>%
+    mutate_at(c("epinephrine", "norepinephrine"), funs(case_when(. > 0.1 ~ 4,
+                                                                 . > 0 ~ 3,
+                                                                 TRUE ~ 0)))
+
+df_sofa <- data_patients %>%
+    select(millennium.id) %>%
+    left_join(sofa_resp, by = "millennium.id") %>%
+    left_join(sofa_labs, by = "millennium.id") %>%
+    left_join(sofa_vitals, by = "millennium.id") %>%
+    left_join(sofa_uop, by = "millennium.id") %>%
+    left_join(sofa_meds, by = "millennium.id") %>%
+    mutate_all(funs(coalesce(., 0))) %>%
+    group_by(millennium.id) %>%
+    mutate(bp_score = max(MAP, dopamine, dobutamine, epinephrine, norepinephrine, na.rm = TRUE),
+           renal_score = max(scr_max, uop.result, na.rm = TRUE),
+           sofa = resp_score + plt_min + GCS + bili_max + bp_score + renal_score) %>%
+    select(millennium.id, sofa)
 
 df_qsofa <- data_vitals %>%
     filter(floor_date(vital.datetime, unit = "day") >= ymd(today()) - days(1)) %>%
@@ -148,7 +283,8 @@ df_temps <- data_temps %>%
 
 df <- data_patients %>%
     mutate_at("gender", str_extract, pattern = "^M|^F") %>%
-    left_join(df_qsofa, by = "millennium.id") %>%
+    left_join(df_sofa, by = "millennium.id") %>%
+    # left_join(df_qsofa, by = "millennium.id") %>%
     left_join(df_temps, by = "millennium.id") %>%
     left_join(df_spark, by = "millennium.id") %>%
     left_join(df_vitals, by = "millennium.id") %>%
@@ -191,7 +327,7 @@ cb_line <- JS(paste0("function (oSettings, json) { $('.spark_scr:not(:has(canvas
 d1 <- datatable(df, 
                 caption = paste0("CVICU - Updated: ", format(update_time, "%B %d, %Y at %I:%M %p")),
                 rownames = FALSE, 
-                colnames = c("Patient", "Age", "Sex", "LOS", "qSOFA", "Tmax", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "UOP", "Alerts"),
+                colnames = c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "UOP", "Alerts"),
                 extensions = "FixedHeader",
                 options = list(
                     fixedHeader = TRUE,
