@@ -133,7 +133,7 @@ sofa_vitals <- data_vitals %>%
     mutate_at("vital", str_replace_all, pattern = vital_names) %>%
     filter(vital %in% c("MAP", "GCS")) %>%
     group_by(millennium.id, vital) %>%
-    summarize_at("vital.result", "min") %>%
+    summarize_at("vital.result", "min", na.rm = TRUE) %>%
     spread(vital, vital.result) %>%
     mutate_at("GCS", funs(case_when(. < 6 ~ 4,
                                     . <= 9 ~ 3,
@@ -166,7 +166,7 @@ sofa_resp <- data_vitals %>%
     fill(FIO2) %>%
     mutate(ratio = PO2 / (FIO2 / 100)) %>%
     filter(!is.na(ratio)) %>%
-    summarize_at("ratio", "min") %>%
+    summarize_at("ratio", "min", na.rm = TRUE) %>%
     left_join(sofa_vent, by = "millennium.id") %>%
     mutate(resp_score = case_when(ratio < 100 & vent ~ 4,
                              ratio < 200 & vent ~ 3,
@@ -187,7 +187,7 @@ sofa_labs <- data_labs %>%
     group_by(millennium.id, lab.datetime) %>%
     spread(lab, lab.result) %>%
     group_by(millennium.id) %>%
-    summarize_at(c("scr", "plt", "bili"), funs(min, max)) %>%
+    summarize_at(c("scr", "plt", "bili"), funs(min, max), na.rm = TRUE) %>%
     select(millennium.id, scr_max, plt_min, bili_max) %>%
     mutate_at("scr_max", funs(case_when(. >= 5 ~ 4,
                                         . >= 3.5 ~ 3,
@@ -230,7 +230,7 @@ sofa_meds <- data_meds %>%
     left_join(df_measures, by = "millennium.id") %>%
     mutate(rate_kg = if_else(rate.units == "microgram/min", rate / weight, rate)) %>%
     group_by(millennium.id, med) %>%
-    summarize_at("rate_kg", funs(rate_max = max)) %>%
+    summarize_at("rate_kg", funs(rate_max = max), na.rm = TRUE) %>%
     mutate_at("med", factor, levels = c("dopamine", "dobutamine", "epinephrine", "norepinephrine")) %>%
     spread(med, rate_max, drop = FALSE, fill = 0) %>%
     mutate_at("dopamine", funs(case_when(. > 15 ~ 4,
