@@ -184,6 +184,8 @@ sofa_labs <- data_labs %>%
            lab %in% c("Creatinine Lvl", "Platelet", "Bili Total")) %>%
     mutate_at("lab", str_replace_all, pattern = labs) %>%
     mutate_at("lab.result", as.numeric) %>%
+    arrange(millennium.id, lab, lab.datetime) %>%
+    distinct(millennium.id, lab, lab.datetime, .keep_all = TRUE) %>%
     group_by(millennium.id, lab.datetime) %>%
     spread(lab, lab.result) %>%
     group_by(millennium.id) %>%
