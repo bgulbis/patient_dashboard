@@ -77,8 +77,8 @@ dialysis <- c("Hemodialysis Output Volume" = "HD",
               "Hemodialysis Output Vol" = "HD",
               "CRRT Output Vol" = "CRRT",
               "CRRT Actual Pt Fluid Removed Vol" = "CRRT",
-              "Peritoneal Dialysis Output Vol" = "PD",
-              "Peritoneal Dialysis Output Volume" = "PD")
+              "Peritoneal Dialysis Output Volume" = "PD",
+              "Peritoneal Dialysis Output Vol" = "PD")
 
 df_dialysis <- data_uop %>%
     filter(floor_date(uop.datetime, unit = "day")  >= ymd(today()) - days(2),
