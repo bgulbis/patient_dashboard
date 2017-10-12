@@ -309,7 +309,7 @@ colDefs1 <- list(
     list(targets = i + 4, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_wbc>' + data + '</span>' }")),
     list(targets = i + 5, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_sbp>' + data + '</span>' }")),
     list(targets = i + 6, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_hr>' + data + '</span>' }")),
-    list(targest = i + 7, width = '15px'),
+    list(targets = i + 7, width = '15px'),
     list(targest = i + 8, width = '30px')
 )
 
