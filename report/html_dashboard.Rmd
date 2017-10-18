@@ -337,6 +337,7 @@ d1 <- datatable(df,
                 colnames = c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "UOP", "Alerts"),
                 extensions = "FixedHeader",
                 options = list(
+                    dom = "t",
                     fixedHeader = TRUE,
                     pageLength = 20,
                     order = list(list(0, 'asc')),
