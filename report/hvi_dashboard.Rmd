@@ -123,8 +123,8 @@ df_drips <- data_meds %>%
     filter(rate > 0) %>%
     mutate(med_abbrv = str_extract(med, "^.{3}")) %>%
     mutate_at("med_abbrv", str_to_lower) %>%
-    mutate_at("rate.units", str_replace_all, pattern = "microgram", replacement = "mcg") %>%
-    unite(drip, med_abbrv, rate, rate.units, sep = " ") %>%
+    # mutate_at("rate.units", str_replace_all, pattern = "microgram", replacement = "mcg") %>%
+    unite(drip, med_abbrv, rate, sep = " ") %>%
     group_by(millennium.id) %>%
     summarize_at("drip", str_c, collapse = ", ")
 
