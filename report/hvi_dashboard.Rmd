@@ -92,6 +92,12 @@ df_dialysis <- data_uop %>%
     distinct(millennium.id, uop) %>%
     rename(alert = uop)
 
+df_iabp <- data_measures %>%
+    filter(measure == "IABP Mean Pressure",
+           measure.datetime >= ymd(today()) - days(1)) %>%
+    mutate(alert = "IABP") %>%
+    distinct(millennium.id, alert)
+
 df_alert <- data_labs %>%
     filter(floor_date(lab.datetime, unit = "day") >= ymd(today()) - days(2),
            lab %in% c("AST", "ALT", "Lactic Acid Lvl", "POC A LA")) %>%
@@ -103,7 +109,7 @@ df_alert <- data_labs %>%
                (lab == "ALT" & lab.result >= 300) |
                (lab == "LA" & lab.result >= 4)) %>%
     rename(alert = lab) %>%
-    bind_rows(df_dialysis) %>%
+    bind_rows(df_dialysis, df_iabp) %>%
     group_by(millennium.id) %>%
     summarize_at("alert", str_c, collapse = ", ")
 
