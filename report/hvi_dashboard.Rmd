@@ -154,6 +154,16 @@ df_vitals <- data_vitals %>%
     spread(vital, x_y) %>%
     select(millennium.id, SBP, HR)
 
+df_gluc <- data_labs %>%
+    filter(floor_date(lab.datetime, unit = "day") >= ymd(today()) - days(1),
+           lab %in% c("Glucose POC")) %>%
+    mutate(lab.drawn = difftime(lab.datetime, now(), units = "hours")) %>%
+    group_by(millennium.id, lab) %>%
+    arrange(lab.datetime, .by_group = TRUE) %>%
+    unite(x_y, lab.drawn, lab.result, sep = ":") %>%
+    summarize_at("x_y", funs(paste(., collapse = ","))) %>%
+    spread(lab, x_y) 
+
 sofa_vitals <- data_vitals %>%
     filter(floor_date(vital.datetime, unit = "day") >= ymd(today()) - hours(24)) %>%
     mutate_at("vital.result", as.numeric) %>%
@@ -317,6 +327,7 @@ df <- data_patients %>%
     left_join(df_temps, by = "millennium.id") %>%
     left_join(df_spark, by = "millennium.id") %>%
     left_join(df_vitals, by = "millennium.id") %>%
+    left_join(df_gluc, by = "millennium.id") %>%
     left_join(df_uop, by = "millennium.id") %>%
     left_join(df_drips, by = "millennium.id") %>%
     left_join(df_alert, by = "millennium.id") %>%
@@ -332,7 +343,8 @@ colDefs1 <- list(
     list(targets = i + 4, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_wbc>' + data + '</span>' }")),
     list(targets = i + 5, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_sbp>' + data + '</span>' }")),
     list(targets = i + 6, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_hr>' + data + '</span>' }")),
-    list(targets = i + 7, width = '15px')
+    list(targets = i + 7, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_gluc>' + data + '</span>' }")),
+    list(targets = i + 8, width = '15px')
     # list(targest = i + 8, width = '30px')
 )
 
@@ -344,9 +356,11 @@ normal_hgb <- c(8.5, 10.0) #14-18
 normal_plt <- c(133, 250)
 normal_sbp <- c(90, 140)
 normal_hr <- c(60, 100)
+normal_gluc <- c(80, 180)
 
 cb_line <- JS(paste0("function (oSettings, json) { $('.spark_scr:not(:has(canvas))').sparkline('html', { ", 
-    line_string, ", normalRangeMin: ", normal_scr[1], ", normalRangeMax: ", normal_scr[2], " });\n $('.spark_hgb:not(:has(canvas))').sparkline('html', { ", 
+    line_string, ", normalRangeMin: ", normal_scr[1], ", normalRangeMax: ", normal_scr[2], " });\n $('.spark_gluc:not(:has(canvas))').sparkline('html', { ", 
+    line_string, ", normalRangeMin: ", normal_gluc[1], ", normalRangeMax: ", normal_gluc[2], " });\n $('.spark_hgb:not(:has(canvas))').sparkline('html', { ", 
     line_string, ", normalRangeMin: ", normal_hgb[1], ", normalRangeMax: ", normal_hgb[2], " });\n $('.spark_plt:not(:has(canvas))').sparkline('html', { ", 
     line_string, ", normalRangeMin: ", normal_plt[1], ", normalRangeMax: ", normal_plt[2], " });\n $('.spark_wbc:not(:has(canvas))').sparkline('html', { ", 
     line_string, ", normalRangeMin: ", normal_wbc[1], ", normalRangeMax: ", normal_wbc[2], " });\n $('.spark_sbp:not(:has(canvas))').sparkline('html', { ", 
@@ -366,7 +380,7 @@ d1 <- df %>%
     select(-location) %>%
     datatable(caption = paste0("Updated: ", format(update_time, "%B %d, %Y at %I:%M %p")),
               rownames = FALSE, 
-              colnames = c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "UOP", "Drips", "Alerts"),
+              colnames = c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "Gluc", "UOP", "Drips", "Alerts"),
               extensions = "FixedHeader",
               options = list(
                   dom = "t",
@@ -391,7 +405,7 @@ d2 <- df %>%
     select(-location) %>%
     datatable(caption = paste0("Updated: ", format(update_time, "%B %d, %Y at %I:%M %p")),
               rownames = FALSE, 
-              colnames = c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "UOP", "Drips", "Alerts"),
+              colnames = c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "Gluc", "UOP", "Drips", "Alerts"),
               extensions = "FixedHeader",
               options = list(
                   dom = "t",
