@@ -17,6 +17,7 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 library(tidyverse)
 library(readxl)
 library(lubridate)
+library(edwr)
 library(DT)
 library(sparkline)
 
@@ -53,7 +54,8 @@ data_labs <- read_excel(
         "lab", 
         "lab.result"
     )
-)
+) %>%
+    format_dates("lab.datetime", tz = "UTC")
 
 data_meds <- read_excel(
     raw[n_files], 
@@ -73,7 +75,8 @@ data_meds <- read_excel(
         "rate.units",
         "infuse.actions"
     )
-)
+) %>%
+    format_dates("med.datetime", tz = "UTC")
 
 data_vitals <- read_excel(
     raw[n_files], 
@@ -86,7 +89,8 @@ data_vitals <- read_excel(
         "vital.result", 
         "vital.units"
     )
-)
+) %>%
+    format_dates("vital.datetime", tz = "UTC")
 
 data_temps <- read_excel(
     raw[n_files], 
@@ -99,7 +103,8 @@ data_temps <- read_excel(
         "vital.result", 
         "vital.units"
     )
-)
+) %>%
+    format_dates("vital.datetime", tz = "UTC")
 
 data_uop <- read_excel(
     raw[n_files], 
@@ -112,7 +117,8 @@ data_uop <- read_excel(
         "uop.result", 
         "uop.units"
     )
-)
+) %>%
+    format_dates("uop.datetime", tz = "UTC")
 
 data_measures <- read_excel(
     raw[n_files], 
@@ -125,7 +131,8 @@ data_measures <- read_excel(
         "measure.result", 
         "measure.units"
     )
-)
+) %>%
+    format_dates("measure.datetime", tz = "UTC")
 
 data_orders <- read_excel(
     raw[n_files], 
@@ -141,7 +148,8 @@ data_orders <- read_excel(
         "order.med", 
         "order.product"
     )
-)
+) %>%
+    format_dates(c("order.start", "order.stop"), tz = "UTC")
 ```
 
 ```{r}
@@ -223,16 +231,29 @@ df_drips <- data_meds %>%
            !is.na(infuse.actions),
            !is.na(rate.units)) %>%
     group_by(millennium.id, med) %>%
-    arrange(desc(med.datetime), .by_group = TRUE) %>%
-    distinct(millennium.id, med, .keep_all = TRUE) %>%
-    filter(rate > 0) %>%
-    mutate(med_abbrv = str_extract(med, "^.{3}")) %>%
+    arrange(med.datetime, .by_group = TRUE) %>%
+    summarize_at("rate", c("last", "sum")) %>%
+    filter(last > 0 | med == "Insulin regular") %>%
+    mutate(rate = if_else(med == "Insulin regular", sum, last),
+           med_abbrv = str_extract(med, "^.{3}")) %>%
     mutate_at("med_abbrv", str_to_lower) %>%
     # mutate_at("rate.units", str_replace_all, pattern = "microgram", replacement = "mcg") %>%
     unite(drip, med_abbrv, rate, sep = " ") %>%
     group_by(millennium.id) %>%
     summarize_at("drip", str_c, collapse = ", ")
 
+df_ssi <- data_meds %>%
+    filter(med.datetime >= ymd(today()) - days(1),
+           is.na(infuse.actions),
+           is.na(rate.units),
+           str_detect(med, "insulin")) %>%
+    mutate(orig.order.id = order.parent.id) %>%
+    mutate_at("orig.order.id", na_if, 0) %>%
+    mutate_at("orig.order.id", funs(coalesce(., order.id))) %>%
+    left_join(data_orders, by = c("millennium.id", "orig.order.id" = "order.id")) %>%
+    filter(prn == "PRN") %>%
+    group_by(millennium.id) %>%
+    summarize_at("dose", sum, na.rm = TRUE)
 
 vital_names <- c("Arterial Systolic BP 1" = "SBP",
                  "Systolic Blood Pressure" = "SBP",
@@ -433,6 +454,7 @@ df <- data_patients %>%
     left_join(df_spark, by = "millennium.id") %>%
     left_join(df_vitals, by = "millennium.id") %>%
     left_join(df_gluc, by = "millennium.id") %>%
+    left_join(df_ssi, by = "millennium.id") %>%
     left_join(df_uop, by = "millennium.id") %>%
     left_join(df_drips, by = "millennium.id") %>%
     left_join(df_alert, by = "millennium.id") %>%
@@ -449,7 +471,7 @@ colDefs1 <- list(
     list(targets = i + 5, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_sbp>' + data + '</span>' }")),
     list(targets = i + 6, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_hr>' + data + '</span>' }")),
     list(targets = i + 7, width = '60px', render = JS("function(data, type, full){ return '<span class=spark_gluc>' + data + '</span>' }")),
-    list(targets = i + 8, width = '15px')
+    list(targets = c(i + 8, i + 9), width = '15px')
     # list(targest = i + 8, width = '30px')
 )
 
@@ -472,6 +494,10 @@ cb_line <- JS(paste0("function (oSettings, json) { $('.spark_scr:not(:has(canvas
     line_string, ", normalRangeMin: ", normal_sbp[1], ", normalRangeMax: ", normal_sbp[2], " });\n $('.spark_hr:not(:has(canvas))').sparkline('html', { ", 
     line_string, ", normalRangeMin: ", normal_hr[1], ", normalRangeMax: ", normal_hr[2], " });}"), 
     collapse = "")
+
+caption <- paste0("Updated: ", format(update_time, "%B %d, %Y at %I:%M %p"))
+
+col_names <- c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "Gluc", "SSI", "UOP", "Drips", "Alerts")
 ```
 
 Column {.tabset}
@@ -483,9 +509,9 @@ Column {.tabset}
 d1 <- df %>%
     filter(location == "HH CCU") %>%
     select(-location) %>%
-    datatable(caption = paste0("Updated: ", format(update_time, "%B %d, %Y at %I:%M %p")),
+    datatable(caption = caption,
               rownames = FALSE, 
-              colnames = c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "Gluc", "UOP", "Drips", "Alerts"),
+              colnames = col_names,
               extensions = "FixedHeader",
               options = list(
                   dom = "t",
@@ -508,9 +534,9 @@ d1
 d2 <- df %>%
     filter(location == "HH CVICU") %>%
     select(-location) %>%
-    datatable(caption = paste0("Updated: ", format(update_time, "%B %d, %Y at %I:%M %p")),
+    datatable(caption = caption,
               rownames = FALSE, 
-              colnames = c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "Gluc", "UOP", "Drips", "Alerts"),
+              colnames = col_names,
               extensions = "FixedHeader",
               options = list(
                   dom = "t",
