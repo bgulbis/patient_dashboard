@@ -234,6 +234,7 @@ df_drips <- data_meds %>%
     arrange(med.datetime, .by_group = TRUE) %>%
     summarize_at("rate", c("last", "sum")) %>%
     filter(last > 0 | med == "Insulin regular") %>%
+    mutate_at("sum", round, digits = 0) %>%
     mutate(rate = if_else(med == "Insulin regular", sum, last),
            med_abbrv = str_extract(med, "^.{3}")) %>%
     mutate_at("med_abbrv", str_to_lower) %>%
