@@ -17,7 +17,6 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 library(tidyverse)
 library(readxl)
 library(lubridate)
-library(stringr)
 library(DT)
 library(sparkline)
 
@@ -30,13 +29,119 @@ update_time <- raw[n_files] %>%
     str_replace_all("hvi_dashboard_|\\.xlsx", "") %>%
     ymd_hms()
 
-data_patients <- read_excel(raw[n_files], sheet = "Patients", skip = 2, col_names = c("millennium.id", "name", "age", "gender", "los", "location")) 
-data_labs <- read_excel(raw[n_files], sheet = "Labs", skip = 2, col_names = c("millennium.id", "lab.datetime", "lab", "lab.result"))
-data_meds <- read_excel(raw[n_files], sheet = "Meds", skip = 2, col_names = c("millennium.id", "med.datetime", "med", "dose", "dose.units", "route", "rate", "rate.units", "infuse.actions"))
-data_vitals <- read_excel(raw[n_files], sheet = "Vitals", skip = 2, col_names = c("millennium.id", "vital.datetime", "vital", "vital.result", "vital.units"))
-data_temps <- read_excel(raw[n_files], sheet = "Temps", skip = 2, col_names = c("millennium.id", "vital.datetime", "vital", "vital.result", "vital.units"))
-data_uop <- read_excel(raw[n_files], sheet = "UOP", skip = 2, col_names = c("millennium.id", "uop.datetime", "uop", "uop.result", "uop.units"))
-data_measures <- read_excel(raw[n_files], sheet = "Measures", skip = 2, col_names = c("millennium.id", "measure.datetime", "measure", "measure.result", "measure.units"))
+data_patients <- read_excel(
+    raw[n_files], 
+    sheet = "Patients", 
+    skip = 2, 
+    col_names = c(
+        "millennium.id", 
+        "name", 
+        "age",
+        "gender",
+        "los",
+        "location"
+    )
+) 
+
+data_labs <- read_excel(
+    raw[n_files], 
+    sheet = "Labs",
+    skip = 2, 
+    col_names = c(
+        "millennium.id", 
+        "lab.datetime", 
+        "lab", 
+        "lab.result"
+    )
+)
+
+data_meds <- read_excel(
+    raw[n_files], 
+    sheet = "Meds", 
+    skip = 2,
+    col_names = c(
+        "millennium.id", 
+        "event.id", 
+        "order.id", 
+        "order.parent.id", 
+        "med.datetime", 
+        "med", 
+        "dose", 
+        "dose.units", 
+        "route", 
+        "rate",
+        "rate.units",
+        "infuse.actions"
+    )
+)
+
+data_vitals <- read_excel(
+    raw[n_files], 
+    sheet = "Vitals", 
+    skip = 2, 
+    col_names = c(
+        "millennium.id", 
+        "vital.datetime", 
+        "vital", 
+        "vital.result", 
+        "vital.units"
+    )
+)
+
+data_temps <- read_excel(
+    raw[n_files], 
+    sheet = "Temps", 
+    skip = 2, 
+    col_names = c(
+        "millennium.id", 
+        "vital.datetime", 
+        "vital", 
+        "vital.result", 
+        "vital.units"
+    )
+)
+
+data_uop <- read_excel(
+    raw[n_files], 
+    sheet = "UOP", 
+    skip = 2, 
+    col_names = c(
+        "millennium.id", 
+        "uop.datetime", 
+        "uop", 
+        "uop.result", 
+        "uop.units"
+    )
+)
+
+data_measures <- read_excel(
+    raw[n_files], 
+    sheet = "Measures", 
+    skip = 2, 
+    col_names = c(
+        "millennium.id", 
+        "measure.datetime", 
+        "measure", 
+        "measure.result", 
+        "measure.units"
+    )
+)
+
+data_orders <- read_excel(
+    raw[n_files], 
+    sheet = "Orders", 
+    skip = 2, 
+    col_names = c(
+        "millennium.id", 
+        "order.id", 
+        "order.start", 
+        "order.stop", 
+        "frequency", 
+        "prn", 
+        "order.med", 
+        "order.product"
+    )
+)
 ```
 
 ```{r}
