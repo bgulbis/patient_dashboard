@@ -188,18 +188,32 @@ hd <- c("Hemodialysis Output Volume", "Hemodialysis Output Vol")
 crrt <- c("CRRT Output Vol", "CRRT Actual Pt Fluid Removed Vol")
 pd <- c("Peritoneal Dialysis Output Vol", "Peritoneal Dialysis Output Volume")
 
-df_uop <- data_uop %>%
+tmp_uop <- data_uop %>%
     mutate_at("uop.result", as.numeric) %>%
     filter(floor_date(uop.datetime, unit = "day")  >= ymd(today()) - days(2),
            !(uop %in% c(hd, crrt, pd))) %>%
     mutate(uop_hr = floor_date(uop.datetime, unit = "hour"),
-           uop_date = if_else(hour(uop_hr) <= 7, floor_date(uop_hr - days(1), unit = "day"), floor_date(uop_hr, unit = "day"))) %>%
+           uop_date = if_else(hour(uop_hr) <= 7, 
+                              floor_date(uop_hr - days(1), unit = "day"), 
+                              floor_date(uop_hr, unit = "day"))) 
+
+df_uop <- tmp_uop %>%
     group_by(millennium.id, uop_date) %>%
     summarize_at("uop.result", sum, na.rm = TRUE) %>%
     left_join(df_measures, by = "millennium.id") %>%
     mutate(uop_rate = uop.result / weight / 24) %>%
     filter(uop_date == today() - days(1)) %>%
     select(millennium.id, uop_rate)
+
+df_uop_hourly <- tmp_uop %>%
+    filter(uop_date == today() - days(1)) %>%
+    mutate(uop.drawn = difftime(uop.datetime, now(), units = "hours"),
+           uop.value = "uop") %>%
+    group_by(millennium.id, uop.value) %>%
+    arrange(uop.datetime, .by_group = TRUE) %>%
+    unite(x_y, uop.drawn, uop.result, sep = ":") %>%
+    summarize_at("x_y", funs(paste(., collapse = ","))) %>%
+    spread(uop.value, x_y) 
 
 dialysis <- c("Hemodialysis Output Volume" = "HD", 
               "Hemodialysis Output Vol" = "HD",
@@ -467,6 +481,7 @@ df <- data_patients %>%
     left_join(df_gluc, by = "millennium.id") %>%
     left_join(df_ssi, by = "millennium.id") %>%
     left_join(df_uop, by = "millennium.id") %>%
+    left_join(df_uop_hourly, by = "millennium.id") %>%
     left_join(df_drips, by = "millennium.id") %>%
     left_join(df_alert, by = "millennium.id") %>%
     left_join(df_pca, by = "millennium.id") %>%
@@ -482,7 +497,8 @@ colDefs1 <- list(
     list(targets = i + 4, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_wbc>' + data + '</span>' }")),
     list(targets = i + 5, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_sbp>' + data + '</span>' }")),
     list(targets = i + 6, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_hr>' + data + '</span>' }")),
-    list(targets = i + 7, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_gluc>' + data + '</span>' }"))
+    list(targets = i + 7, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_gluc>' + data + '</span>' }")),
+    list(targets = i + 10, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_uop>' + data + '</span>' }"))
     # list(targets = c(i + 8, i + 9), width = '15px')
     # list(targest = i + 8, width = '30px')
 )
@@ -496,10 +512,12 @@ normal_plt <- c(133, 250)
 normal_sbp <- c(90, 140)
 normal_hr <- c(60, 100)
 normal_gluc <- c(80, 180)
+normal_uop <- c(50, 150)
 
 cb_line <- JS(paste0("function (oSettings, json) { $('.spark_scr:not(:has(canvas))').sparkline('html', { ", 
     line_string, ", normalRangeMin: ", normal_scr[1], ", normalRangeMax: ", normal_scr[2], " });\n $('.spark_gluc:not(:has(canvas))').sparkline('html', { ", 
-    line_string, ", normalRangeMin: ", normal_gluc[1], ", normalRangeMax: ", normal_gluc[2], " });\n $('.spark_hgb:not(:has(canvas))').sparkline('html', { ", 
+    line_string, ", normalRangeMin: ", normal_gluc[1], ", normalRangeMax: ", normal_gluc[2], " });\n $('.spark_uop:not(:has(canvas))').sparkline('html', { ", 
+    line_string, ", normalRangeMin: ", normal_uop[1], ", normalRangeMax: ", normal_uop[2], " });\n $('.spark_hgb:not(:has(canvas))').sparkline('html', { ", 
     line_string, ", normalRangeMin: ", normal_hgb[1], ", normalRangeMax: ", normal_hgb[2], " });\n $('.spark_plt:not(:has(canvas))').sparkline('html', { ", 
     line_string, ", normalRangeMin: ", normal_plt[1], ", normalRangeMax: ", normal_plt[2], " });\n $('.spark_wbc:not(:has(canvas))').sparkline('html', { ", 
     line_string, ", normalRangeMin: ", normal_wbc[1], ", normalRangeMax: ", normal_wbc[2], " });\n $('.spark_sbp:not(:has(canvas))').sparkline('html', { ", 
@@ -509,7 +527,7 @@ cb_line <- JS(paste0("function (oSettings, json) { $('.spark_scr:not(:has(canvas
 
 caption <- paste0("Updated: ", format(update_time, "%B %d, %Y at %I:%M %p"))
 
-col_names <- c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "Gluc", "SSI", "UOP", "Drips", "Alerts", "PCA", "Doses")
+col_names <- c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "Gluc", "SSI", "UOP", "Hourly", "Drips", "Alerts", "PCA", "Doses")
 ```
 
 Column {.tabset}
