@@ -153,15 +153,64 @@ data_orders <- read_excel(
 ```
 
 ```{r}
+spark_lines <- function(x, y, nl_min, nl_max, type = "line") {
+    spk_chr(
+        values = y,
+        type = type,
+        xvalues = x,
+        width = 50,
+        lineColor = "black",
+        fillColor = FALSE,
+        highlightLineColor = "orange",
+        highlightSpotColor = "blue",
+        normalRangeMin = nl_min,
+        normalRangeMax = nl_max
+    )
+}
+
+caption <- paste0("Updated: ", format(update_time, "%B %d, %Y at %I:%M %p"))
+
+col_names <- c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "Temp", "SCr", 
+               "WBC", "Hgb", "Plt", "SBP", "HR", "Gluc", "SSI", "UOP", "Avg", 
+               "Drips", "Alerts", "PCA", "Doses")
+```
+
+```{r spark}
 df_spark <- data_labs %>%
     filter(floor_date(lab.datetime, unit = "day") >= ymd(today()) - days(3),
            lab %in% c("Creatinine Lvl", "Hgb", "Platelet", "WBC")) %>%
+    group_by(millennium.id, lab.datetime, lab) %>%
+    summarize_at("lab.result", first, order_by = "lab.datetime") %>%
     mutate(lab.drawn = difftime(lab.datetime, now(), units = "hours")) %>%
-    group_by(millennium.id, lab) %>%
-    arrange(lab.datetime, .by_group = TRUE) %>%
-    unite(x_y, lab.drawn, lab.result, sep = ":") %>%
-    summarize_at("x_y", funs(paste(., collapse = ","))) %>%
-    spread(lab, x_y) 
+    group_by(millennium.id, lab)
+
+spk_hgb <- df_spark %>%
+    filter(lab == "Hgb") %>%
+    add_count(millennium.id) %>%
+    filter(n > 1) %>%
+    summarize(hgb = spark_lines(lab.drawn, lab.result, 8.5, 10)) %>%
+    select(-lab)
+
+spk_platelet <- df_spark %>%
+    filter(lab == "Platelet") %>%
+    add_count(millennium.id) %>%
+    filter(n > 1) %>%
+    summarize(platelet = spark_lines(lab.drawn, lab.result, 133, 250)) %>%
+    select(-lab)
+
+spk_scr <- df_spark %>%
+    filter(lab == "Creatinine Lvl") %>%
+    add_count(millennium.id) %>%
+    filter(n > 1) %>%
+    summarize(scr = spark_lines(lab.drawn, lab.result, 0.5, 1.4)) %>%
+    select(-lab)
+
+spk_wbc <- df_spark %>%
+    filter(lab == "WBC") %>%
+    add_count(millennium.id) %>%
+    filter(n > 1) %>%
+    summarize(wbc = spark_lines(lab.drawn, lab.result, 3.7, 10.4)) %>%
+    select(-lab)
 
 df_measures <- data_measures %>%
     mutate_at("measure.result", as.numeric) %>%
@@ -192,28 +241,27 @@ tmp_uop <- data_uop %>%
     mutate_at("uop.result", as.numeric) %>%
     filter(floor_date(uop.datetime, unit = "day")  >= ymd(today()) - days(2),
            !(uop %in% c(hd, crrt, pd))) %>%
-    mutate(uop_hr = floor_date(uop.datetime, unit = "hour"),
-           uop_date = if_else(hour(uop_hr) <= 7, 
-                              floor_date(uop_hr - days(1), unit = "day"), 
-                              floor_date(uop_hr, unit = "day"))) 
+    mutate(uop.hr = floor_date(uop.datetime, unit = "hour"),
+           uop.date = if_else(hour(uop.hr) <= 7, 
+                              floor_date(uop.hr - days(1), unit = "day"), 
+                              floor_date(uop.hr, unit = "day"))) 
 
 df_uop <- tmp_uop %>%
-    group_by(millennium.id, uop_date) %>%
+    group_by(millennium.id, uop.date) %>%
     summarize_at("uop.result", sum, na.rm = TRUE) %>%
     left_join(df_measures, by = "millennium.id") %>%
-    mutate(uop_rate = uop.result / weight / 24) %>%
-    filter(uop_date == today() - days(1)) %>%
-    select(millennium.id, uop_rate)
+    mutate(uop.rate = uop.result / weight / 24) %>%
+    filter(uop.date == today() - days(1)) %>%
+    select(millennium.id, uop.rate)
 
-df_uop_hourly <- tmp_uop %>%
-    filter(uop_date == today() - days(1)) %>%
-    mutate(uop.drawn = difftime(uop.datetime, now(), units = "hours"),
-           uop.value = "uop") %>%
-    group_by(millennium.id, uop.value) %>%
+spk_uop <- tmp_uop %>%
+    filter(uop.date == today() - days(1)) %>%
+    mutate(uop.drawn = difftime(uop.datetime, now(), units = "hours")) %>%
+    group_by(millennium.id) %>%
     arrange(uop.datetime, .by_group = TRUE) %>%
-    unite(x_y, uop.drawn, uop.result, sep = ":") %>%
-    summarize_at("x_y", funs(paste(., collapse = ","))) %>%
-    spread(uop.value, x_y) 
+    add_count(millennium.id) %>%
+    filter(n > 1) %>%
+    summarize(spk.uop = spark_lines(uop.drawn, uop.result, 50, 150)) 
 
 dialysis <- c("Hemodialysis Output Volume" = "HD", 
               "Hemodialysis Output Vol" = "HD",
@@ -262,7 +310,6 @@ df_drips <- data_meds %>%
     mutate(rate = if_else(med == "Insulin regular", sum, last),
            med_abbrv = str_extract(med, "^.{3}")) %>%
     mutate_at("med_abbrv", str_to_lower) %>%
-    # mutate_at("rate.units", str_replace_all, pattern = "microgram", replacement = "mcg") %>%
     unite(drip, med_abbrv, rate, sep = " ") %>%
     group_by(millennium.id) %>%
     summarize_at("drip", str_c, collapse = ", ")
@@ -299,22 +346,49 @@ df_vitals <- data_vitals %>%
     select(-vital.units) %>%
     mutate(vital.drawn = difftime(vital.datetime, now(), units = "hours")) %>%
     group_by(millennium.id, vital) %>%
-    arrange(vital.datetime, .by_group = TRUE) %>%
-    unite(x_y, vital.drawn, vital.result, sep = ":") %>%
-    summarize_at("x_y", funs(paste(., collapse = ","))) %>%
-    spread(vital, x_y) %>%
-    select(millennium.id, SBP, HR)
+    arrange(vital.datetime, .by_group = TRUE)
 
-df_gluc <- data_labs %>%
+spk_sbp <- df_vitals %>%
+    filter(vital == "SBP") %>%
+    add_count(millennium.id) %>%
+    filter(n > 1) %>%
+    summarize(sbp = spark_lines(vital.drawn, vital.result, 90, 140)) %>%
+    select(-vital)
+
+spk_hr <- df_vitals %>%
+    filter(vital == "HR") %>%
+    add_count(millennium.id) %>%
+    filter(n > 1) %>%
+    summarize(hr = spark_lines(vital.drawn, vital.result, 60, 100)) %>%
+    select(-vital)
+
+spk_gluc <- data_labs %>%
     filter(floor_date(lab.datetime, unit = "day") >= ymd(today()) - days(1),
-           lab %in% c("Glucose POC")) %>%
+           lab == "Glucose POC") %>%
     mutate(lab.drawn = difftime(lab.datetime, now(), units = "hours")) %>%
-    group_by(millennium.id, lab) %>%
+    group_by(millennium.id) %>%
     arrange(lab.datetime, .by_group = TRUE) %>%
-    unite(x_y, lab.drawn, lab.result, sep = ":") %>%
-    summarize_at("x_y", funs(paste(., collapse = ","))) %>%
-    spread(lab, x_y) 
+    add_count(millennium.id) %>%
+    filter(n > 1) %>%
+    summarize(gluc = spark_lines(lab.drawn, lab.result, 80, 180)) 
 
+tmp_temps <- data_temps %>%
+    filter(vital.datetime >= now() - hours(24),
+           vital.units == "DegF") %>%
+    mutate_at("vital.result", as.numeric) 
+
+df_temps <- tmp_temps %>%
+    group_by(millennium.id) %>%
+    summarize_at("vital.result", max)
+
+spk_temps <- tmp_temps %>%
+    mutate(vital.drawn = difftime(vital.datetime, now(), units = "hours")) %>%
+    group_by(millennium.id) %>%
+    arrange(vital.datetime, .by_group = TRUE) %>%
+    summarize(spk.temp = spark_lines(vital.drawn, vital.result, 97.5, 100.5)) 
+```
+
+```{r sofa}
 sofa_vitals <- data_vitals %>%
     filter(floor_date(vital.datetime, unit = "day") >= ymd(today()) - hours(24)) %>%
     mutate_at("vital.result", as.numeric) %>%
@@ -463,86 +537,29 @@ df_qsofa <- data_vitals %>%
     group_by(millennium.id) %>%
     mutate(qsofa = sum(SBP_min <= 100, RR_max >= 22, GCS_min < 15, na.rm = TRUE)) %>%
     select(millennium.id, qsofa)
-    
-tmp_temps <- data_temps %>%
-    filter(vital.datetime >= now() - hours(24),
-           vital.units == "DegF") %>%
-    mutate_at("vital.result", as.numeric) 
+```
 
-df_temps_hourly <- tmp_temps %>%
-    mutate(vital.drawn = difftime(vital.datetime, now(), units = "hours"),
-           vital.value = "temp") %>%
-    group_by(millennium.id, vital.value) %>%
-    arrange(vital.datetime, .by_group = TRUE) %>%
-    unite(x_y, vital.drawn, vital.result, sep = ":") %>%
-    summarize_at("x_y", funs(paste(., collapse = ","))) %>%
-    spread(vital.value, x_y) 
-
-df_temps <- tmp_temps %>%
-    group_by(millennium.id) %>%
-    summarize_at("vital.result", max)
-
+```{r}
 df <- data_patients %>%
     mutate_at("gender", str_extract, pattern = "^M|^F") %>%
     left_join(df_sofa, by = "millennium.id") %>%
-    # left_join(df_qsofa, by = "millennium.id") %>%
     left_join(df_temps, by = "millennium.id") %>%
-    left_join(df_temps_hourly, by = "millennium.id") %>%
-    left_join(df_spark, by = "millennium.id") %>%
-    left_join(df_vitals, by = "millennium.id") %>%
-    left_join(df_gluc, by = "millennium.id") %>%
+    left_join(spk_temps, by = "millennium.id") %>%
+    left_join(spk_scr, by = "millennium.id") %>%
+    left_join(spk_wbc, by = "millennium.id") %>%
+    left_join(spk_hgb, by = "millennium.id") %>%
+    left_join(spk_platelet, by = "millennium.id") %>%
+    left_join(spk_sbp, by = "millennium.id") %>%
+    left_join(spk_hr, by = "millennium.id") %>%
+    left_join(spk_gluc, by = "millennium.id") %>%
     left_join(df_ssi, by = "millennium.id") %>%
+    left_join(spk_uop, by = "millennium.id") %>%
     left_join(df_uop, by = "millennium.id") %>%
-    left_join(df_uop_hourly, by = "millennium.id") %>%
     left_join(df_drips, by = "millennium.id") %>%
     left_join(df_alert, by = "millennium.id") %>%
     left_join(df_pca, by = "millennium.id") %>%
     select(-millennium.id)
 
-i <- 5
-
-colDefs1 <- list(
-    # list(targets = seq(1, i, 1), width = '20px'),
-    list(targets = i + 1, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_temp>' + data + '</span>' }")),
-    list(targets = i + 2, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_scr>' + data + '</span>' }")),
-    list(targets = i + 3, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_hgb>' + data + '</span>' }")),
-    list(targets = i + 4, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_plt>' + data + '</span>' }")),
-    list(targets = i + 5, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_wbc>' + data + '</span>' }")),
-    list(targets = i + 6, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_sbp>' + data + '</span>' }")),
-    list(targets = i + 7, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_hr>' + data + '</span>' }")),
-    list(targets = i + 8, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_gluc>' + data + '</span>' }")),
-    list(targets = i + 11, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_uop>' + data + '</span>' }"))
-    # list(targets = c(i + 8, i + 9), width = '15px')
-    # list(targest = i + 8, width = '30px')
-)
-
-line_string <- "type: 'line', width: '50px', lineColor: 'black', fillColor: false, highlightLineColor: 'orange', highlightSpotColor: 'orange'"
-
-normal_scr <- c(0.5, 1.4)
-normal_wbc <- c(3.7, 10.4)
-normal_hgb <- c(8.5, 10.0) #14-18
-normal_plt <- c(133, 250)
-normal_sbp <- c(90, 140)
-normal_hr <- c(60, 100)
-normal_gluc <- c(80, 180)
-normal_uop <- c(50, 150)
-normal_temp <- c(97.5, 100.5)
-
-cb_line <- JS(paste0("function (oSettings, json) { $('.spark_scr:not(:has(canvas))').sparkline('html', { ", 
-    line_string, ", normalRangeMin: ", normal_scr[1], ", normalRangeMax: ", normal_scr[2], " });\n $('.spark_gluc:not(:has(canvas))').sparkline('html', { ", 
-    line_string, ", normalRangeMin: ", normal_gluc[1], ", normalRangeMax: ", normal_gluc[2], " });\n $('.spark_temp:not(:has(canvas))').sparkline('html', { ", 
-    line_string, ", normalRangeMin: ", normal_temp[1], ", normalRangeMax: ", normal_temp[2], " });\n $('.spark_uop:not(:has(canvas))').sparkline('html', { ", 
-    line_string, ", normalRangeMin: ", normal_uop[1], ", normalRangeMax: ", normal_uop[2], " });\n $('.spark_hgb:not(:has(canvas))').sparkline('html', { ", 
-    line_string, ", normalRangeMin: ", normal_hgb[1], ", normalRangeMax: ", normal_hgb[2], " });\n $('.spark_plt:not(:has(canvas))').sparkline('html', { ", 
-    line_string, ", normalRangeMin: ", normal_plt[1], ", normalRangeMax: ", normal_plt[2], " });\n $('.spark_wbc:not(:has(canvas))').sparkline('html', { ", 
-    line_string, ", normalRangeMin: ", normal_wbc[1], ", normalRangeMax: ", normal_wbc[2], " });\n $('.spark_sbp:not(:has(canvas))').sparkline('html', { ", 
-    line_string, ", normalRangeMin: ", normal_sbp[1], ", normalRangeMax: ", normal_sbp[2], " });\n $('.spark_hr:not(:has(canvas))').sparkline('html', { ", 
-    line_string, ", normalRangeMin: ", normal_hr[1], ", normalRangeMax: ", normal_hr[2], " });}"), 
-    collapse = "")
-
-caption <- paste0("Updated: ", format(update_time, "%B %d, %Y at %I:%M %p"))
-
-col_names <- c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "Temp", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "Gluc", "SSI", "UOP", "Hourly", "Drips", "Alerts", "PCA", "Doses")
 ```
 
 Column {.tabset}
@@ -551,11 +568,12 @@ Column {.tabset}
 ### CCU
 
 ```{r}
-d1 <- df %>%
+df %>%
     filter(location == "HH CCU") %>%
     select(-location) %>%
     datatable(caption = caption,
               rownames = FALSE, 
+              escape = FALSE,
               colnames = col_names,
               extensions = "FixedHeader",
               options = list(
@@ -563,24 +581,23 @@ d1 <- df %>%
                   fixedHeader = TRUE,
                   pageLength = 20,
                   order = list(list(0, 'asc')),
-                  columnDefs = colDefs1, 
-                  fnDrawCallback = cb_line)) %>%
-    formatRound("los", 1) %>%
-    formatRound("uop_rate", 1)
-
-d1$dependencies <- append(d1$dependencies, htmlwidgets:::getDependency("sparkline"))
-
-d1
+                  fnDrawCallback = htmlwidgets::JS(
+                      'function(){ HTMLWidgets.staticRender(); }'
+                  )
+              )) %>%
+    formatRound(c("los", "vital.result", "uop.rate"), 1) %>%
+    spk_add_deps()
 ```
 
 ### CVICU
 
 ```{r}
-d2 <- df %>%
+df %>%
     filter(location == "HH CVICU") %>%
     select(-location) %>%
     datatable(caption = caption,
               rownames = FALSE, 
+              escape = FALSE,
               colnames = col_names,
               extensions = "FixedHeader",
               options = list(
@@ -588,12 +605,10 @@ d2 <- df %>%
                   fixedHeader = TRUE,
                   pageLength = 20,
                   order = list(list(0, 'asc')),
-                  columnDefs = colDefs1, 
-                  fnDrawCallback = cb_line)) %>%
-    formatRound("los", 1) %>%
-    formatRound("uop_rate", 1)
-
-d2$dependencies <- append(d1$dependencies, htmlwidgets:::getDependency("sparkline"))
-
-d2
+                  fnDrawCallback = htmlwidgets::JS(
+                      'function(){ HTMLWidgets.staticRender(); }'
+                  )
+              )) %>%
+    formatRound(c("los", "vital.result", "uop.rate"), 1) %>%
+    spk_add_deps()
 ```
