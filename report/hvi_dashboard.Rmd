@@ -464,10 +464,21 @@ df_qsofa <- data_vitals %>%
     mutate(qsofa = sum(SBP_min <= 100, RR_max >= 22, GCS_min < 15, na.rm = TRUE)) %>%
     select(millennium.id, qsofa)
     
-df_temps <- data_temps %>%
+tmp_temps <- data_temps %>%
     filter(vital.datetime >= now() - hours(24),
            vital.units == "DegF") %>%
-    mutate_at("vital.result", as.numeric) %>%
+    mutate_at("vital.result", as.numeric) 
+
+df_temps_hourly <- tmp_temps %>%
+    mutate(vital.drawn = difftime(vital.datetime, now(), units = "hours"),
+           vital.value = "temp") %>%
+    group_by(millennium.id, vital.value) %>%
+    arrange(vital.datetime, .by_group = TRUE) %>%
+    unite(x_y, vital.drawn, vital.result, sep = ":") %>%
+    summarize_at("x_y", funs(paste(., collapse = ","))) %>%
+    spread(vital.value, x_y) 
+
+df_temps <- tmp_temps %>%
     group_by(millennium.id) %>%
     summarize_at("vital.result", max)
 
@@ -476,6 +487,7 @@ df <- data_patients %>%
     left_join(df_sofa, by = "millennium.id") %>%
     # left_join(df_qsofa, by = "millennium.id") %>%
     left_join(df_temps, by = "millennium.id") %>%
+    left_join(df_temps_hourly, by = "millennium.id") %>%
     left_join(df_spark, by = "millennium.id") %>%
     left_join(df_vitals, by = "millennium.id") %>%
     left_join(df_gluc, by = "millennium.id") %>%
@@ -491,14 +503,15 @@ i <- 5
 
 colDefs1 <- list(
     # list(targets = seq(1, i, 1), width = '20px'),
-    list(targets = i + 1, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_scr>' + data + '</span>' }")),
-    list(targets = i + 2, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_hgb>' + data + '</span>' }")),
-    list(targets = i + 3, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_plt>' + data + '</span>' }")),
-    list(targets = i + 4, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_wbc>' + data + '</span>' }")),
-    list(targets = i + 5, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_sbp>' + data + '</span>' }")),
-    list(targets = i + 6, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_hr>' + data + '</span>' }")),
-    list(targets = i + 7, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_gluc>' + data + '</span>' }")),
-    list(targets = i + 10, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_uop>' + data + '</span>' }"))
+    list(targets = i + 1, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_temp>' + data + '</span>' }")),
+    list(targets = i + 2, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_scr>' + data + '</span>' }")),
+    list(targets = i + 3, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_hgb>' + data + '</span>' }")),
+    list(targets = i + 4, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_plt>' + data + '</span>' }")),
+    list(targets = i + 5, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_wbc>' + data + '</span>' }")),
+    list(targets = i + 6, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_sbp>' + data + '</span>' }")),
+    list(targets = i + 7, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_hr>' + data + '</span>' }")),
+    list(targets = i + 8, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_gluc>' + data + '</span>' }")),
+    list(targets = i + 11, width = '55px', render = JS("function(data, type, full){ return '<span class=spark_uop>' + data + '</span>' }"))
     # list(targets = c(i + 8, i + 9), width = '15px')
     # list(targest = i + 8, width = '30px')
 )
@@ -513,10 +526,12 @@ normal_sbp <- c(90, 140)
 normal_hr <- c(60, 100)
 normal_gluc <- c(80, 180)
 normal_uop <- c(50, 150)
+normal_temp <- c(97.5, 100.5)
 
 cb_line <- JS(paste0("function (oSettings, json) { $('.spark_scr:not(:has(canvas))').sparkline('html', { ", 
     line_string, ", normalRangeMin: ", normal_scr[1], ", normalRangeMax: ", normal_scr[2], " });\n $('.spark_gluc:not(:has(canvas))').sparkline('html', { ", 
-    line_string, ", normalRangeMin: ", normal_gluc[1], ", normalRangeMax: ", normal_gluc[2], " });\n $('.spark_uop:not(:has(canvas))').sparkline('html', { ", 
+    line_string, ", normalRangeMin: ", normal_gluc[1], ", normalRangeMax: ", normal_gluc[2], " });\n $('.spark_temp:not(:has(canvas))').sparkline('html', { ", 
+    line_string, ", normalRangeMin: ", normal_temp[1], ", normalRangeMax: ", normal_temp[2], " });\n $('.spark_uop:not(:has(canvas))').sparkline('html', { ", 
     line_string, ", normalRangeMin: ", normal_uop[1], ", normalRangeMax: ", normal_uop[2], " });\n $('.spark_hgb:not(:has(canvas))').sparkline('html', { ", 
     line_string, ", normalRangeMin: ", normal_hgb[1], ", normalRangeMax: ", normal_hgb[2], " });\n $('.spark_plt:not(:has(canvas))').sparkline('html', { ", 
     line_string, ", normalRangeMin: ", normal_plt[1], ", normalRangeMax: ", normal_plt[2], " });\n $('.spark_wbc:not(:has(canvas))').sparkline('html', { ", 
@@ -527,7 +542,7 @@ cb_line <- JS(paste0("function (oSettings, json) { $('.spark_scr:not(:has(canvas
 
 caption <- paste0("Updated: ", format(update_time, "%B %d, %Y at %I:%M %p"))
 
-col_names <- c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "Gluc", "SSI", "UOP", "Hourly", "Drips", "Alerts", "PCA", "Doses")
+col_names <- c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "Temp", "SCr", "Hgb", "Plt", "WBC", "SBP", "HR", "Gluc", "SSI", "UOP", "Hourly", "Drips", "Alerts", "PCA", "Doses")
 ```
 
 Column {.tabset}
