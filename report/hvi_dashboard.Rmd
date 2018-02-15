@@ -181,7 +181,7 @@ df_spark <- data_labs %>%
            lab %in% c("Creatinine Lvl", "Hgb", "Platelet", "WBC")) %>%
     group_by(millennium.id, lab.datetime, lab) %>%
     summarize_at("lab.result", first, order_by = "lab.datetime") %>%
-    mutate(lab.drawn = difftime(lab.datetime, now(), units = "hours")) %>%
+    mutate(lab.drawn = difftime(lab.datetime, update_time, units = "hours")) %>%
     group_by(millennium.id, lab)
 
 spk_hgb <- df_spark %>%
@@ -256,7 +256,7 @@ df_uop <- tmp_uop %>%
 
 spk_uop <- tmp_uop %>%
     filter(uop.date == today() - days(1)) %>%
-    mutate(uop.drawn = difftime(uop.datetime, now(), units = "hours")) %>%
+    mutate(uop.drawn = difftime(uop.datetime, update_time, units = "hours")) %>%
     group_by(millennium.id) %>%
     arrange(uop.datetime, .by_group = TRUE) %>%
     add_count(millennium.id) %>%
@@ -344,7 +344,7 @@ df_vitals <- data_vitals %>%
     mutate_at("vital", str_replace_all, pattern = vital_names) %>%
     filter(vital %in% c("SBP", "HR")) %>%
     select(-vital.units) %>%
-    mutate(vital.drawn = difftime(vital.datetime, now(), units = "hours")) %>%
+    mutate(vital.drawn = difftime(vital.datetime, update_time, units = "hours")) %>%
     group_by(millennium.id, vital) %>%
     arrange(vital.datetime, .by_group = TRUE)
 
@@ -365,7 +365,7 @@ spk_hr <- df_vitals %>%
 spk_gluc <- data_labs %>%
     filter(floor_date(lab.datetime, unit = "day") >= ymd(today()) - days(1),
            lab == "Glucose POC") %>%
-    mutate(lab.drawn = difftime(lab.datetime, now(), units = "hours")) %>%
+    mutate(lab.drawn = difftime(lab.datetime, update_time, units = "hours")) %>%
     group_by(millennium.id) %>%
     arrange(lab.datetime, .by_group = TRUE) %>%
     add_count(millennium.id) %>%
@@ -373,7 +373,7 @@ spk_gluc <- data_labs %>%
     summarize(gluc = spark_lines(lab.drawn, lab.result, 80, 180)) 
 
 tmp_temps <- data_temps %>%
-    filter(vital.datetime >= now() - hours(24),
+    filter(vital.datetime >= update_time - hours(24),
            vital.units == "DegF") %>%
     mutate_at("vital.result", as.numeric) 
 
@@ -382,7 +382,7 @@ df_temps <- tmp_temps %>%
     summarize_at("vital.result", max)
 
 spk_temps <- tmp_temps %>%
-    mutate(vital.drawn = difftime(vital.datetime, now(), units = "hours")) %>%
+    mutate(vital.drawn = difftime(vital.datetime, update_time, units = "hours")) %>%
     group_by(millennium.id) %>%
     arrange(vital.datetime, .by_group = TRUE) %>%
     summarize(spk.temp = spark_lines(vital.drawn, vital.result, 97.5, 100.5)) 
