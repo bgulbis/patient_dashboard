@@ -167,12 +167,6 @@ spark_lines <- function(x, y, nl_min, nl_max, type = "line") {
         normalRangeMax = nl_max
     )
 }
-
-caption <- paste0("Updated: ", format(update_time, "%B %d, %Y at %I:%M %p"))
-
-col_names <- c("Patient", "Age", "Sex", "LOS", "SOFA", "Tmax", "Temp", "SCr", 
-               "WBC", "Hgb", "Plt", "SBP", "HR", "Gluc", "SSI", "UOP", "Avg", 
-               "Drips", "Alerts", "PCA", "Doses")
 ```
 
 ```{r spark}
@@ -315,11 +309,16 @@ df_drips <- data_meds %>%
     summarize_at("drip", str_c, collapse = ", ")
 
 df_ssi <- data_meds %>%
-    filter(med.datetime >= ymd(today()) - days(1),
+    filter(med.datetime >= ymd(today()) - days(2),
            is.na(infuse.actions),
            is.na(rate.units),
            str_detect(med, "insulin")) %>%
-    mutate(orig.order.id = order.parent.id) %>%
+    mutate(orig.order.id = order.parent.id,
+           ssi.hr = floor_date(med.datetime, unit = "hour"),
+           ssi.date = if_else(hour(ssi.hr) <= 7, 
+                              floor_date(ssi.hr - days(1), unit = "day"), 
+                              floor_date(ssi.hr, unit = "day"))) %>%
+    filter(ssi.date == today() - days(1)) %>%
     mutate_at("orig.order.id", na_if, 0) %>%
     mutate_at("orig.order.id", funs(coalesce(., order.id))) %>%
     left_join(data_orders, by = c("millennium.id", "orig.order.id" = "order.id")) %>%
@@ -339,7 +338,7 @@ vital_names <- c("Arterial Systolic BP 1" = "SBP",
                  "Mean Arterial Pressure" = "MAP")
 
 df_vitals <- data_vitals %>%
-    filter(floor_date(vital.datetime, unit = "day") >= ymd(today()) - days(1)) %>%
+    filter(vital.datetime >= update_time - hours(24)) %>%
     mutate_at("vital.result", as.numeric) %>%
     mutate_at("vital", str_replace_all, pattern = vital_names) %>%
     filter(vital %in% c("SBP", "HR")) %>%
@@ -363,9 +362,18 @@ spk_hr <- df_vitals %>%
     select(-vital)
 
 spk_gluc <- data_labs %>%
-    filter(floor_date(lab.datetime, unit = "day") >= ymd(today()) - days(1),
+    filter(floor_date(lab.datetime, unit = "day") >= ymd(today()) - days(2),
            lab == "Glucose POC") %>%
-    mutate(lab.drawn = difftime(lab.datetime, update_time, units = "hours")) %>%
+    mutate(
+        lab.drawn = difftime(lab.datetime, update_time, units = "hours"),
+        gluc.hr = floor_date(lab.datetime, unit = "hour"),
+        gluc.date = if_else(
+            hour(gluc.hr) <= 7, 
+            floor_date(gluc.hr - days(1), unit = "day"), 
+            floor_date(gluc.hr, unit = "day")
+        )
+    ) %>%
+    filter(gluc.date == today() - days(1)) %>%
     group_by(millennium.id) %>%
     arrange(lab.datetime, .by_group = TRUE) %>%
     add_count(millennium.id) %>%
@@ -543,8 +551,8 @@ df_qsofa <- data_vitals %>%
 df <- data_patients %>%
     mutate_at("gender", str_extract, pattern = "^M|^F") %>%
     left_join(df_sofa, by = "millennium.id") %>%
-    left_join(df_temps, by = "millennium.id") %>%
     left_join(spk_temps, by = "millennium.id") %>%
+    left_join(df_temps, by = "millennium.id") %>%
     left_join(spk_scr, by = "millennium.id") %>%
     left_join(spk_wbc, by = "millennium.id") %>%
     left_join(spk_hgb, by = "millennium.id") %>%
@@ -562,11 +570,15 @@ df <- data_patients %>%
 ```
 
 ```{r}
+col_names <- c("Patient", "Age", "Sex", "LOS", "SOFA", "Temp", "Tmax", "SCr", 
+               "WBC", "Hgb", "Plt", "SBP", "HR", "Gluc", "SSI", "UOP", "Avg", 
+               "Drips", "Alerts", "PCA", "Doses")
+
 make_table <- function(x) {
     x %>%
         select(-location) %>%
         datatable(
-            caption = caption,
+            caption = paste0("Updated: ", format(update_time, "%B %d, %Y at %I:%M %p")),
             rownames = FALSE, 
             escape = FALSE,
             colnames = col_names,
