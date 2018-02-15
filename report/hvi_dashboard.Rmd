@@ -559,8 +559,33 @@ df <- data_patients %>%
     left_join(df_alert, by = "millennium.id") %>%
     left_join(df_pca, by = "millennium.id") %>%
     select(-millennium.id)
-
 ```
+
+```{r}
+make_table <- function(x) {
+    x %>%
+        select(-location) %>%
+        datatable(
+            caption = caption,
+            rownames = FALSE, 
+            escape = FALSE,
+            colnames = col_names,
+            extensions = "FixedHeader",
+            options = list(
+                dom = "t",
+                fixedHeader = TRUE,
+                pageLength = 20,
+                order = list(list(0, 'asc')),
+                fnDrawCallback = htmlwidgets::JS(
+                    'function(){ HTMLWidgets.staticRender(); }'
+                )
+            )
+        ) %>%
+        formatRound(c("los", "vital.result", "uop.rate"), 1) %>%
+        spk_add_deps()
+}
+```
+
 
 Column {.tabset}
 -----------------------------------------------------------------------
@@ -570,23 +595,7 @@ Column {.tabset}
 ```{r}
 df %>%
     filter(location == "HH CCU") %>%
-    select(-location) %>%
-    datatable(caption = caption,
-              rownames = FALSE, 
-              escape = FALSE,
-              colnames = col_names,
-              extensions = "FixedHeader",
-              options = list(
-                  dom = "t",
-                  fixedHeader = TRUE,
-                  pageLength = 20,
-                  order = list(list(0, 'asc')),
-                  fnDrawCallback = htmlwidgets::JS(
-                      'function(){ HTMLWidgets.staticRender(); }'
-                  )
-              )) %>%
-    formatRound(c("los", "vital.result", "uop.rate"), 1) %>%
-    spk_add_deps()
+    make_table()
 ```
 
 ### CVICU
@@ -594,21 +603,5 @@ df %>%
 ```{r}
 df %>%
     filter(location == "HH CVICU") %>%
-    select(-location) %>%
-    datatable(caption = caption,
-              rownames = FALSE, 
-              escape = FALSE,
-              colnames = col_names,
-              extensions = "FixedHeader",
-              options = list(
-                  dom = "t",
-                  fixedHeader = TRUE,
-                  pageLength = 20,
-                  order = list(list(0, 'asc')),
-                  fnDrawCallback = htmlwidgets::JS(
-                      'function(){ HTMLWidgets.staticRender(); }'
-                  )
-              )) %>%
-    formatRound(c("los", "vital.result", "uop.rate"), 1) %>%
-    spk_add_deps()
+    make_table()
 ```
