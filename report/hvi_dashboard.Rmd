@@ -450,8 +450,10 @@ labs <- c("Creatinine Lvl" = "scr",
           "Bili Total" = "bili")
 
 sofa_labs <- data_labs %>%
-    filter(floor_date(lab.datetime, unit = "day") >= ymd(today()) - hours(24),
-           lab %in% c("Creatinine Lvl", "Platelet", "Bili Total")) %>%
+    filter(
+        floor_date(lab.datetime, unit = "day") >= ymd(today()) - hours(24),
+        lab %in% c("Creatinine Lvl", "Platelet", "Bili Total")
+    ) %>%
     mutate_at("lab", str_replace_all, pattern = labs) %>%
     mutate_at("lab.result", as.numeric) %>%
     arrange(millennium.id, lab, lab.datetime) %>%
@@ -461,36 +463,70 @@ sofa_labs <- data_labs %>%
     group_by(millennium.id) %>%
     summarize_at(c("scr", "plt", "bili"), funs(min, max), na.rm = TRUE) %>%
     select(millennium.id, scr_max, plt_min, bili_max) %>%
-    mutate_at("scr_max", funs(case_when(. >= 5 ~ 4,
-                                        . >= 3.5 ~ 3,
-                                        . >= 2 ~ 2,
-                                        . >= 1.2 ~ 1,
-                                        TRUE ~ 0))) %>%
-    mutate_at("plt_min", funs(case_when(. < 20 ~ 4,
-                                        . < 50 ~ 3,
-                                        . < 100 ~ 2,
-                                        . < 150 ~ 1,
-                                        TRUE ~ 0))) %>%
-    mutate_at("bili_max", funs(case_when(. >= 12 ~ 4,
-                                         . >= 6 ~ 3,
-                                         . >= 2 ~ 2,
-                                         . >= 1.2 ~ 1,
-                                         TRUE ~ 0)))
+    mutate_at(
+        "scr_max", 
+        funs(
+            case_when(
+                . >= 5 ~ 4,
+                . >= 3.5 ~ 3,
+                . >= 2 ~ 2,
+                . >= 1.2 ~ 1,
+                TRUE ~ 0
+            )
+        )
+    ) %>%
+    mutate_at(
+        "plt_min", 
+        funs(
+            case_when(
+                . < 20 ~ 4,
+                . < 50 ~ 3,
+                . < 100 ~ 2,
+                . < 150 ~ 1,
+                TRUE ~ 0
+            )
+        )
+    ) %>%
+    mutate_at(
+        "bili_max", 
+        funs(
+            case_when(
+                . >= 12 ~ 4,
+                . >= 6 ~ 3,
+                . >= 2 ~ 2,
+                . >= 1.2 ~ 1,
+                TRUE ~ 0
+            )
+        )
+    )
     
 sofa_uop <- data_uop %>%
     mutate_at("uop.result", as.numeric) %>%
-    filter(floor_date(uop.datetime, unit = "day")  >= ymd(today()) - days(2),
-           !(uop %in% c(hd, crrt, pd))) %>%
-    mutate(uop_hr = floor_date(uop.datetime, unit = "hour"),
-           uop_date = if_else(hour(uop_hr) <= 7, 
-                              floor_date(uop_hr - days(1), unit = "day"), 
-                              floor_date(uop_hr, unit = "day"))) %>%
+    filter(
+        floor_date(uop.datetime, unit = "day") >= ymd(today()) - days(2),
+        !(uop %in% c(hd, crrt, pd))
+    ) %>%
+    mutate(
+        uop_hr = floor_date(uop.datetime, unit = "hour"),
+        uop_date = if_else(
+            hour(uop_hr) <= 7, 
+            floor_date(uop_hr - days(1), unit = "day"), 
+            floor_date(uop_hr, unit = "day")
+        )
+    ) %>%
     group_by(millennium.id, uop_date) %>%
     summarize_at("uop.result", sum, na.rm = TRUE) %>%
     filter(uop_date == ymd(today() - days(1))) %>%
-    mutate_at("uop.result", funs(case_when(. < 200 ~ 4,
-                                           . < 500 ~ 3,
-                                           TRUE ~ 0))) %>%
+    mutate_at(
+        "uop.result", 
+        funs(
+            case_when(
+                . < 200 ~ 4,
+                . < 500 ~ 3,
+                TRUE ~ 0
+            )
+        )
+    ) %>%
     select(millennium.id, uop.result)
 
 sofa_meds <- data_meds %>%
@@ -588,12 +624,18 @@ make_table <- function(x) {
                 fixedHeader = TRUE,
                 pageLength = 20,
                 order = list(list(0, 'asc')),
-                fnDrawCallback = htmlwidgets::JS(
-                    'function(){ HTMLWidgets.staticRender(); }'
+                initComplete = JS(
+                    "function(settings, json) {",
+                    "$(this.api().table().header()).css({'font-size': '80%'});",
+                    "}"
+                ),
+                fnDrawCallback = JS(
+                    "function(){ HTMLWidgets.staticRender(); }"
                 )
             )
         ) %>%
         formatRound(c("los", "vital.result", "uop.rate"), 1) %>%
+        formatStyle(columns = c(1:ncol(x)), fontSize = "80%") %>%
         spk_add_deps()
 }
 ```
