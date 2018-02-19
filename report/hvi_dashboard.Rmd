@@ -221,7 +221,7 @@ df_measures <- data_measures %>%
     select(millennium.id, measure, measure.result) %>%
     spread(measure, measure.result)
 
-df_pca <- data_measures %>%
+tmp_pca <- data_measures %>%
     mutate_at("measure.result", as.numeric) %>%
     filter(
         measure %in% c("PCA Doses Delivered", "PCA Total Demands"),
@@ -236,8 +236,17 @@ df_pca <- data_measures %>%
             "PCA Total Demands" = "demand",
             "PCA Doses Delivered" = "doses"
         )
-    ) %>%
-    spread(measure, measure.result)
+    ) 
+
+if (nrow(tmp_pca) == 0) {
+    df_pca <- data_patients %>%
+        select(millennium.id) %>%
+        mutate(demand = NA_integer_,
+               doses = NA_integer_)
+} else {
+    df_pca <- spread(tmp_pca, measure, measure.result)
+
+}
 
 hd <- c("Hemodialysis Output Volume", "Hemodialysis Output Vol")
 crrt <- c("CRRT Output Vol", "CRRT Actual Pt Fluid Removed Vol")
