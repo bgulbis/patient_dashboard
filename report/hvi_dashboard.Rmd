@@ -163,8 +163,8 @@ spark_lines <- function(x, y, nl_min, nl_max, type = "line") {
         fillColor = FALSE,
         highlightLineColor = "orange",
         highlightSpotColor = "blue",
-        normalRangeMin = nl_min,
-        normalRangeMax = nl_max
+        normalRangeMin = nl_min[1],
+        normalRangeMax = nl_max[1]
     )
 }
 ```
@@ -180,33 +180,31 @@ df_spark <- data_labs %>%
     mutate(lab.drawn = difftime(lab.datetime, update_time, units = "hours")) %>%
     group_by(millennium.id, lab)
 
-spk_hgb <- df_spark %>%
-    filter(lab == "Hgb") %>%
-    add_count(millennium.id) %>%
+spk_labs <- df_spark %>%
+    add_count(millennium.id, lab) %>%
     filter(n > 1) %>%
-    summarize(hgb = spark_lines(lab.drawn, lab.result, 8.5, 10)) %>%
-    select(-lab)
-
-spk_platelet <- df_spark %>%
-    filter(lab == "Platelet") %>%
-    add_count(millennium.id) %>%
-    filter(n > 1) %>%
-    summarize(platelet = spark_lines(lab.drawn, lab.result, 133, 250)) %>%
-    select(-lab)
-
-spk_scr <- df_spark %>%
-    filter(lab == "Creatinine Lvl") %>%
-    add_count(millennium.id) %>%
-    filter(n > 1) %>%
-    summarize(scr = spark_lines(lab.drawn, lab.result, 0.5, 1.4)) %>%
-    select(-lab)
-
-spk_wbc <- df_spark %>%
-    filter(lab == "WBC") %>%
-    add_count(millennium.id) %>%
-    filter(n > 1) %>%
-    summarize(wbc = spark_lines(lab.drawn, lab.result, 3.7, 10.4)) %>%
-    select(-lab)
+    summarize_at(
+        "lab.result", 
+        funs(
+            spark_lines(
+                x = lab.drawn, 
+                y = ., 
+                nl_min = case_when(
+                    lab == "Hgb" ~ 8.5,
+                    lab == "Platelet" ~ 133,
+                    lab == "Creatinine Lvl" ~ 0.5,
+                    lab == "WBC" ~ 3.7
+                ),
+                nl_max = case_when(
+                    lab == "Hgb" ~ 10,
+                    lab == "Platelet" ~ 250,
+                    lab == "Creatinine Lvl" ~ 1.4,
+                    lab == "WBC" ~ 10.4
+                )
+            )
+        )
+    ) %>%
+    spread(lab, lab.result)
 
 df_measures <- data_measures %>%
     mutate_at("measure.result", as.numeric) %>%
@@ -394,19 +392,28 @@ df_vitals <- data_vitals %>%
     group_by(millennium.id, vital) %>%
     arrange(vital.datetime, .by_group = TRUE)
 
-spk_sbp <- df_vitals %>%
-    filter(vital == "SBP") %>%
-    add_count(millennium.id) %>%
+spk_vitals <- df_vitals %>%
+    filter(vital %in% c("SBP", "HR")) %>%
+    add_count(millennium.id, vital) %>%
     filter(n > 1) %>%
-    summarize(sbp = spark_lines(vital.drawn, vital.result, 90, 140)) %>%
-    select(-vital)
-
-spk_hr <- df_vitals %>%
-    filter(vital == "HR") %>%
-    add_count(millennium.id) %>%
-    filter(n > 1) %>%
-    summarize(hr = spark_lines(vital.drawn, vital.result, 60, 100)) %>%
-    select(-vital)
+    summarize_at(
+        "vital.result", 
+        funs(
+            spark_lines(
+                x = vital.drawn, 
+                y = ., 
+                nl_min = case_when(
+                    vital == "SBP" ~ 90,
+                    vital == "HR" ~ 60
+                ),
+                nl_max = case_when(
+                    vital == "SBP" ~ 140,
+                    vital == "HR" ~ 100
+                )
+            )
+        )
+    ) %>%
+    spread(vital, vital.result)
 
 spk_gluc <- data_labs %>%
     filter(
@@ -442,6 +449,8 @@ spk_temps <- tmp_temps %>%
     mutate(vital.drawn = difftime(vital.datetime, update_time, units = "hours")) %>%
     group_by(millennium.id) %>%
     arrange(vital.datetime, .by_group = TRUE) %>%
+    add_count(millennium.id) %>%
+    filter(n > 1) %>%
     summarize(spk.temp = spark_lines(vital.drawn, vital.result, 97.5, 100.5)) 
 ```
 
@@ -688,12 +697,8 @@ df <- data_patients %>%
     left_join(df_sofa, by = "millennium.id") %>%
     left_join(spk_temps, by = "millennium.id") %>%
     left_join(df_temps, by = "millennium.id") %>%
-    left_join(spk_scr, by = "millennium.id") %>%
-    left_join(spk_wbc, by = "millennium.id") %>%
-    left_join(spk_hgb, by = "millennium.id") %>%
-    left_join(spk_platelet, by = "millennium.id") %>%
-    left_join(spk_sbp, by = "millennium.id") %>%
-    left_join(spk_hr, by = "millennium.id") %>%
+    left_join(spk_labs, by = "millennium.id") %>%
+    left_join(spk_vitals, by = "millennium.id") %>%
     left_join(spk_gluc, by = "millennium.id") %>%
     left_join(df_ssi, by = "millennium.id") %>%
     left_join(spk_uop, by = "millennium.id") %>%
@@ -706,7 +711,7 @@ df <- data_patients %>%
 
 ```{r}
 col_names <- c("Patient", "Age", "Sex", "LOS", "SOFA", "Temp", "Tmax", "SCr", 
-               "WBC", "Hgb", "Plt", "SBP", "HR", "Gluc", "SSI", "UOP", "Avg", 
+               "Hgb", "Plt", "WBC", "HR", "SBP", "Gluc", "SSI", "UOP", "Avg", 
                "Drips", "Alerts", "PCA", "Doses")
 
 make_table <- function(x) {
@@ -743,18 +748,18 @@ make_table <- function(x) {
 Column {.tabset}
 -----------------------------------------------------------------------
 
-### CCU
-
-```{r}
-df %>%
-    filter(location == "HH CCU") %>%
-    make_table()
-```
-
 ### CVICU
 
 ```{r}
 df %>%
     filter(location == "HH CVICU") %>%
+    make_table()
+```
+
+### CCU
+
+```{r}
+df %>%
+    filter(location == "HH CCU") %>%
     make_table()
 ```
