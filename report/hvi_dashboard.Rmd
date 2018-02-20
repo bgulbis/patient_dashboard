@@ -210,7 +210,7 @@ spk_labs <- df_labs %>%
     spread(lab, lab.result) %>%
     select(millennium.id, scr, wbc, hgb, platelet)
 
-df_bands <- data_labs %>%
+tmp_bands <- data_labs %>%
     filter(
         lab == "Bands",
         floor_date(lab.datetime, unit = "day")  >= ymd(today()) - days(1)
@@ -218,8 +218,15 @@ df_bands <- data_labs %>%
     mutate_at("lab", str_to_lower) %>%
     mutate_at("lab.result", as.numeric) %>%
     group_by(millennium.id, lab) %>%
-    summarize_at("lab.result", last) %>%
-    spread(lab, lab.result)
+    summarize_at("lab.result", last) 
+
+if (nrow(tmp_bands) == 0) {
+    df_bands <- data_patients %>%
+        select(millennium.id) %>%
+        mutate(bands = NA_integer_)
+} else {
+    df_bands <- spread(tmp_bands, lab, lab.result)
+}
     
 df_measures <- data_measures %>%
     mutate_at("measure.result", as.numeric) %>%
