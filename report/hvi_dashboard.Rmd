@@ -170,17 +170,20 @@ spark_lines <- function(x, y, nl_min, nl_max, type = "line") {
 ```
 
 ```{r spark}
-df_spark <- data_labs %>%
+df_labs <- data_labs %>%
     filter(
         floor_date(lab.datetime, unit = "day") >= ymd(today()) - days(3),
         lab %in% c("Creatinine Lvl", "Hgb", "Platelet", "WBC")
     ) %>%
+    mutate_at("lab", str_replace_all, pattern = c("Creatinine Lvl" = "scr")) %>%
+    mutate_at("lab", str_to_lower) %>%
     group_by(millennium.id, lab.datetime, lab) %>%
+    mutate_at("lab.result", as.numeric) %>%
     summarize_at("lab.result", first, order_by = "lab.datetime") %>%
     mutate(lab.drawn = difftime(lab.datetime, update_time, units = "hours")) %>%
     group_by(millennium.id, lab)
 
-spk_labs <- df_spark %>%
+spk_labs <- df_labs %>%
     add_count(millennium.id, lab) %>%
     filter(n > 1) %>%
     summarize_at(
@@ -190,22 +193,34 @@ spk_labs <- df_spark %>%
                 x = lab.drawn, 
                 y = ., 
                 nl_min = case_when(
-                    lab == "Hgb" ~ 8.5,
-                    lab == "Platelet" ~ 133,
-                    lab == "Creatinine Lvl" ~ 0.5,
-                    lab == "WBC" ~ 3.7
+                    lab == "hgb" ~ 8.5,
+                    lab == "platelet" ~ 133,
+                    lab == "scr" ~ 0.5,
+                    lab == "wbc" ~ 3.7
                 ),
                 nl_max = case_when(
-                    lab == "Hgb" ~ 10,
-                    lab == "Platelet" ~ 250,
-                    lab == "Creatinine Lvl" ~ 1.4,
-                    lab == "WBC" ~ 10.4
+                    lab == "hgb" ~ 10,
+                    lab == "platelet" ~ 250,
+                    lab == "scr" ~ 1.4,
+                    lab == "wbc" ~ 10.4
                 )
             )
         )
     ) %>%
-    spread(lab, lab.result)
+    spread(lab, lab.result) %>%
+    select(millennium.id, scr, wbc, hgb, platelet)
 
+df_bands <- data_labs %>%
+    filter(
+        lab == "Bands",
+        floor_date(lab.datetime, unit = "day")  >= ymd(today()) - days(1)
+    ) %>%
+    mutate_at("lab", str_to_lower) %>%
+    mutate_at("lab.result", as.numeric) %>%
+    group_by(millennium.id, lab) %>%
+    summarize_at("lab.result", last) %>%
+    spread(lab, lab.result)
+    
 df_measures <- data_measures %>%
     mutate_at("measure.result", as.numeric) %>%
     mutate_at("measure", str_to_lower) %>%
@@ -386,14 +401,14 @@ df_vitals <- data_vitals %>%
     filter(vital.datetime >= update_time - hours(24)) %>%
     mutate_at("vital.result", as.numeric) %>%
     mutate_at("vital", str_replace_all, pattern = vital_names) %>%
-    filter(vital %in% c("SBP", "HR")) %>%
+    mutate_at("vital", str_to_lower) %>%
+    filter(vital %in% c("sbp", "hr")) %>%
     select(-vital.units) %>%
     mutate(vital.drawn = difftime(vital.datetime, update_time, units = "hours")) %>%
     group_by(millennium.id, vital) %>%
     arrange(vital.datetime, .by_group = TRUE)
 
 spk_vitals <- df_vitals %>%
-    filter(vital %in% c("SBP", "HR")) %>%
     add_count(millennium.id, vital) %>%
     filter(n > 1) %>%
     summarize_at(
@@ -403,17 +418,18 @@ spk_vitals <- df_vitals %>%
                 x = vital.drawn, 
                 y = ., 
                 nl_min = case_when(
-                    vital == "SBP" ~ 90,
-                    vital == "HR" ~ 60
+                    vital == "sbp" ~ 90,
+                    vital == "hr" ~ 60
                 ),
                 nl_max = case_when(
-                    vital == "SBP" ~ 140,
-                    vital == "HR" ~ 100
+                    vital == "sbp" ~ 140,
+                    vital == "hr" ~ 100
                 )
             )
         )
     ) %>%
-    spread(vital, vital.result)
+    spread(vital, vital.result) %>%
+    select(millennium.id, sbp, hr)
 
 spk_gluc <- data_labs %>%
     filter(
@@ -452,6 +468,20 @@ spk_temps <- tmp_temps %>%
     add_count(millennium.id) %>%
     filter(n > 1) %>%
     summarize(spk.temp = spark_lines(vital.drawn, vital.result, 97.5, 100.5)) 
+
+last_scr <- df_labs %>%
+    filter(lab == "scr") %>%
+    arrange(millennium.id, lab.datetime) %>%
+    group_by(millennium.id) %>%
+    summarize_at("lab.result", last)
+
+df_crcl <- data_patients %>%
+    left_join(last_scr, by = "millennium.id") %>%
+    left_join(df_measures, by = "millennium.id") %>%
+    group_by(millennium.id) %>%
+    mutate(crcl = calc_crcl(age, gender, lab.result, weight, height)) %>%
+    select(millennium.id, crcl)
+
 ```
 
 ```{r sofa}
@@ -698,6 +728,8 @@ df <- data_patients %>%
     left_join(spk_temps, by = "millennium.id") %>%
     left_join(df_temps, by = "millennium.id") %>%
     left_join(spk_labs, by = "millennium.id") %>%
+    left_join(df_crcl, by = "millennium.id") %>%
+    left_join(df_bands, by = "millennium.id") %>%
     left_join(spk_vitals, by = "millennium.id") %>%
     left_join(spk_gluc, by = "millennium.id") %>%
     left_join(df_ssi, by = "millennium.id") %>%
@@ -706,19 +738,44 @@ df <- data_patients %>%
     left_join(df_drips, by = "millennium.id") %>%
     left_join(df_alert, by = "millennium.id") %>%
     left_join(df_pca, by = "millennium.id") %>%
-    select(-millennium.id)
+    select(name:scr, crcl, wbc, bands, hgb:doses)
 ```
 
 ```{r}
-col_names <- c("Patient", "Age", "Sex", "LOS", "SOFA", "Temp", "Tmax", "SCr", 
-               "Hgb", "Plt", "WBC", "HR", "SBP", "Gluc", "SSI", "UOP", "Avg", 
-               "Drips", "Alerts", "PCA", "Doses")
+col_names <- c(
+    "Patient", 
+    "Age",
+    "Sex",
+    "LOS",
+    "SOFA",
+    "Temp",
+    "Tmax",
+    "SCr",
+    "CrCl",
+    "WBC", 
+    "Bands",
+    "Hgb",
+    "Plt",
+    "SBP",
+    "HR", 
+    "Gluc",
+    "SSI", 
+    "UOP", 
+    "Avg", 
+    "Drips",
+    "Alerts",
+    "PCA",
+    "Doses"
+)
 
 make_table <- function(x) {
     x %>%
         select(-location) %>%
         datatable(
-            caption = paste0("Updated: ", format(update_time, "%B %d, %Y at %I:%M %p")),
+            caption = paste0(
+                "Updated: ", 
+                format(update_time, "%B %d, %Y at %I:%M %p")
+            ),
             rownames = FALSE, 
             escape = FALSE,
             colnames = col_names,
@@ -739,6 +796,7 @@ make_table <- function(x) {
             )
         ) %>%
         formatRound(c("los", "vital.result", "uop.rate"), 1) %>%
+        formatRound("crcl", 0) %>%
         formatStyle(columns = c(1:ncol(x)), fontSize = "80%") %>%
         spk_add_deps()
 }
