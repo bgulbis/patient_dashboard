@@ -853,7 +853,7 @@ col_names <- c(
     "SCr",
     "CrCl",
     "WBC", 
-    "Bands",
+    "B%",
     "Hgb",
     "Plt",
     "SBP",
