@@ -388,7 +388,7 @@ df_ssi <- data_meds %>%
         med.datetime >= ymd(today()) - days(2),
         is.na(infuse.actions),
         is.na(rate.units),
-        str_detect(med, "insulin")
+        str_detect(med, regex("insulin", ignore_case = TRUE))
     ) %>%
     mutate(
         orig.order.id = order.parent.id,
