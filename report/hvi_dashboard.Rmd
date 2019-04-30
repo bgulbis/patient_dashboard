@@ -1,5 +1,6 @@
 ---
 title: "HVI Patient Dashboard"
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = '/mnt/hgfs/U_Drive/', output_file = 'hvi_dashboard.html') })
 output: flexdashboard::flex_dashboard
 ---
 
