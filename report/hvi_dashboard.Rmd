@@ -1,6 +1,6 @@
 ---
 title: "HVI Patient Dashboard"
-knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = '/mnt/u/', output_file = 'hvi_dashboard.html') })
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = 'U:', output_file = 'hvi_dashboard.html') })
 output: flexdashboard::flex_dashboard
 ---
 
@@ -884,7 +884,7 @@ make_table <- function(x) {
             options = list(
                 dom = "t",
                 fixedHeader = TRUE,
-                pageLength = 20,
+                pageLength = 21,
                 order = list(list(0, 'asc')),
                 initComplete = JS(
                     "function(settings, json) {",
