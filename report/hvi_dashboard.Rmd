@@ -22,7 +22,10 @@ library(edwr)
 library(DT)
 library(sparkline)
 
-raw <- list.files("../data/raw", full.names = TRUE) %>%
+# file_loc <- "../data/raw"
+file_loc <- "U:/Data/patient_dashboard/data/raw"
+
+raw <- list.files(file_loc, full.names = TRUE) %>%
     sort()
 
 n_files <- length(raw)
