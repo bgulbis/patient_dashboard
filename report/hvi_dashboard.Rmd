@@ -23,7 +23,7 @@ library(DT)
 library(sparkline)
 
 # file_loc <- "../data/raw"
-file_loc <- "U:/Data/patient_dashboard/data/raw"
+file_loc <- "U:/Data/patient_dashboard"
 
 raw <- list.files(file_loc, full.names = TRUE) %>%
     sort()
