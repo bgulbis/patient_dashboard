@@ -17,7 +17,28 @@ WHERE
     AND ENCNTR_DOMAIN.END_EFFECTIVE_DT_TM > DATE '2099-12-31'
     AND (
         ENCNTR_DOMAIN.ENCNTR_ID = CLINICAL_EVENT.ENCNTR_ID
-        AND CLINICAL_EVENT.EVENT_CD IN (12016463, 119822527, 134401648, 10662250, 134422765, 119822453, 173814326, 515653299, 53807856, 30094, 30098, 30100, 263779626, 172563306, 119822523, 119822536, 119822505, 10679282, 172563303, 119822492)
+        AND CLINICAL_EVENT.EVENT_CD IN (
+			12016463, -- Glucose POC
+			119822527, -- Apical Heart Rate
+			134401648, -- Arterial Systolic BP 1
+			10662250, -- FIO2 (%)
+			134422765, -- Glasgow Coma Score
+			119822453, -- Mean Arterial Pressure
+			173814326, -- Mean Arterial Pressure (Invasive)
+			515653299, -- POC A %FIO2
+			53807856, -- POC A PO2
+			30094, -- Respiratory Rate
+			30098, -- Systolic Blood Pressure
+			30100, -- Temperature
+			263779626, -- Temperature Bladder
+			172563306, -- Temperature Esophageal
+			119822523, -- Temperature Intravascular
+			119822536, -- Temperature Oral
+			119822505, -- Temperature Rectal
+			10679282, -- Temperature Sensor
+			172563303, -- Temperature Skin
+			119822492 -- Temperature Tympanic
+		)
         AND CLINICAL_EVENT.EVENT_CD = CV_EVENT.CODE_VALUE
         AND CLINICAL_EVENT.RESULT_UNITS_CD = CV_RESULT_UNITS.CODE_VALUE
         AND CLINICAL_EVENT.EVENT_END_DT_TM >= pi_to_gmt(SYSDATE - 1, pi_time_zone(2, @Variable('BOUSER')))
