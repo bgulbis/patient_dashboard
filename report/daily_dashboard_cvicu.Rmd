@@ -1,0 +1,224 @@
+---
+title: "HVI Patient Dashboard"
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = 'U:', output_file = 'dashboard_cvicu.html') })
+output: flexdashboard::flex_dashboard
+---
+
+<style>
+    body .main-container {
+        max-width: 100%;
+    }
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(readxl)
+library(lubridate)
+# library(edwr)
+library(DT)
+library(sparkline)
+
+spark_lines <- function(x, y, nl_min, nl_max, type = "line") {
+    spk_chr(
+        values = y,
+        type = type,
+        xvalues = x,
+        width = 50,
+        lineColor = "black",
+        fillColor = FALSE,
+        highlightLineColor = "orange",
+        highlightSpotColor = "blue",
+        normalRangeMin = nl_min[1],
+        normalRangeMax = nl_max[1]
+    )
+}
+
+ref_normals <- tibble(
+    event = c(
+        "serum creatinine",
+        "wbc",
+        "hgb",
+        "platelet",
+        "glucose",
+        "heart rate",
+        "systolic blood pressure",
+        "urine output",
+        "temperature"
+    ),
+    normal_min = c(0.5, 3.7, 8.5, 133, 80, 60, 90, 50, 97.5),
+    normal_max = c(1.4, 10.4, 10, 250, 180, 100, 140, 150, 100.5)
+)
+
+```
+
+```{r read_data}
+file_nm <- "U:/Data/patient_dashboard/dashboard_data_daily.xlsx"
+
+data_dash <- read_excel(file_nm, sheet="dashboard") %>%
+    rename_all(tolower)
+
+data_spark <- read_excel(file_nm, sheet="sparklines") %>%
+    rename_all(tolower)
+
+data_drips <- read_excel(file_nm, sheet="drips") %>%
+    rename_all(tolower)
+
+```
+
+```{r sparklines}
+sparks <- data_spark %>%
+    mutate(
+        hrs = difftime(
+            event_datetime,
+            now(),
+            units = "hours"
+        )
+    ) %>%
+    left_join(ref_normals, by = "event") %>%
+    add_count(encntr_id, event) %>%
+    filter(n > 1) %>%
+    group_by(encntr_id, event) %>%
+    summarize_at(
+        "result_val", 
+        list(
+            ~spark_lines(
+                x = hrs, 
+                y = ., 
+                nl_min = normal_min,
+                nl_max = normal_max
+            )
+        )
+    ) %>%
+    spread(event, result_val) 
+```
+
+```{r drips}
+drips <- data_drips %>%
+    mutate(drip = paste(str_extract(medication, "^.{3}"), rate)) %>%
+    group_by(encntr_id) %>%
+    summarize_at("drip", str_c, collapse = ", ")
+
+```
+
+
+```{r datatable}
+col_names <- c(
+    "Room",
+    "Patient", 
+    "Age",
+    "Sex",
+    "Wt",
+    "LOS",
+    "SOFA",
+    "Temp",
+    "Tmax",
+    "Renal",
+    "SCr",
+    "CrCl",
+    "WBC", 
+    "B%",
+    "Hgb",
+    "Plt",
+    "SBP",
+    "HR", 
+    "Gluc",
+    # "SSI", 
+    "INR",
+    "PTT",
+    "UOP",
+    "Vol",
+    "Avg",
+    "Net",
+    "Dialysis",
+    "Drips",
+    "Devices",
+    "T.Bili",
+    "AST",
+    "ALT",
+    # "Alerts",
+    "PCA",
+    "Doses",
+    "A1c",
+    "TSH",
+    "LDL",
+    "MRSA"
+)
+
+df <- data_dash %>% 
+    left_join(sparks, by = "encntr_id") %>%
+    left_join(drips, by = "encntr_id") %>%
+    select(
+        bed,
+        name,
+        age,
+        sex,
+        weight,
+        los,
+        sofa,
+        temperature,
+        tmax,
+        `serum creatinine`,
+        scr,
+        crcl,
+        wbc,
+        bands,
+        hgb,
+        platelet,
+        `systolic blood pressure`,
+        `heart rate`,
+        glucose,
+        inr,
+        ptt,
+        `urine output`,
+        uop,
+        uop_avg,
+        net_io,
+        dialysis,
+        drip,
+        iabp,
+        tbili,
+        ast,
+        alt,
+        pca_doses,
+        pca_demands,
+        a1c,
+        tsh,
+        ldl,
+        mrsa_pcr
+    )
+
+df %>%
+    datatable(
+        caption = paste0(
+            "Data updated: ", 
+            format(file.info(file_nm)$mtime, "%B %d, %Y at %I:%M %p")
+        ),
+        rownames = FALSE, 
+        escape = FALSE,
+        colnames = col_names,
+        extensions = "FixedHeader",
+        options = list(
+            dom = "t",
+            fixedHeader = TRUE,
+            pageLength = 21,
+            order = list(list(0, 'asc')),
+            initComplete = JS(
+                "function(settings, json) {",
+                "$(this.api().table().header()).css({'font-size': '80%'});",
+                "}"
+            ),
+            fnDrawCallback = JS(
+                "function(){ HTMLWidgets.staticRender(); }"
+            )
+        )
+    ) %>%
+    formatRound(c("los", "tmax", "uop_avg", "a1c", "tsh", "inr"), 1) %>%
+    formatRound(c("crcl", "uop", "net_io", "ptt", "weight"), 0) %>%
+    formatStyle(columns = c(1:ncol(df)), fontSize = "80%") %>%
+    spk_add_deps()
+
+
+
+```
+
