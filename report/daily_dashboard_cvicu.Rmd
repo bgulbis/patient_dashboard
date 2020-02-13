@@ -1,5 +1,5 @@
 ---
-title: "HVI Patient Dashboard"
+title: "CVICU Patient Dashboard"
 knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = 'U:', output_file = 'dashboard_cvicu.html') })
 output: flexdashboard::flex_dashboard
 ---
@@ -15,7 +15,6 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 library(tidyverse)
 library(readxl)
 library(lubridate)
-# library(edwr)
 library(DT)
 library(sparkline)
 
@@ -36,18 +35,19 @@ spark_lines <- function(x, y, nl_min, nl_max, type = "line") {
 
 ref_normals <- tibble(
     event = c(
-        "serum creatinine",
+        "scr",
         "wbc",
         "hgb",
         "platelet",
         "glucose",
-        "heart rate",
-        "systolic blood pressure",
-        "urine output",
-        "temperature"
+        "hr",
+        "sbp",
+        "uop",
+        "temperature",
+        "inr"
     ),
-    normal_min = c(0.5, 3.7, 8.5, 133, 80, 60, 90, 50, 97.5),
-    normal_max = c(1.4, 10.4, 10, 250, 180, 100, 140, 150, 100.5)
+    normal_min = c(0.5, 3.7, 8.5, 133, 80, 60, 90, 50, 97.5, 1.5),
+    normal_max = c(1.4, 10.4, 10, 250, 180, 100, 140, 150, 100.5, 3)
 )
 
 ```
@@ -90,7 +90,58 @@ sparks <- data_spark %>%
             )
         )
     ) %>%
-    spread(event, result_val) 
+    # pivot_wider(
+    #     names_from = event, 
+    #     values_from = result_val,
+    #     names_prefix = "spark_"
+    # )
+    spread(event, result_val)
+```
+
+```{r current_values}
+curr_vals <- data_spark %>%
+    filter(
+        event %in% c(
+            "temperature",
+            "scr",
+            "wbc",
+            "hgb",
+            "platelet",
+            "inr"
+        )
+    ) %>%
+    arrange(encntr_id, event, desc(event_datetime), desc(event_id)) %>%
+    distinct(encntr_id, event, .keep_all = TRUE) %>%
+    select(encntr_id, event, result_val) %>%
+    pivot_wider(
+        names_from = event, 
+        values_from = result_val,
+        names_prefix = "curr_"
+    )
+```
+
+```{r max_values}
+max_vals <- data_spark %>%
+    filter(event == "temperature") %>%
+    group_by(encntr_id, event) %>%
+    summarize_at("result_val", max, na.rm = TRUE) %>%
+    pivot_wider(
+        names_from = event, 
+        values_from = result_val,
+        names_prefix = "max_"
+    )
+```
+
+```{r sum_values}
+sum_vals <- data_spark %>%
+    filter(event == "uop") %>%
+    group_by(encntr_id, event) %>%
+    summarize_at("result_val", sum, na.rm = TRUE) %>%
+    pivot_wider(
+        names_from = event, 
+        values_from = result_val,
+        names_prefix = "sum_"
+    )
 ```
 
 ```{r drips}
@@ -111,42 +162,54 @@ col_names <- c(
     "Wt",
     "LOS",
     "SOFA",
-    "Temp",
+    "Temp Trend",
     "Tmax",
-    "Renal",
+    "SCr Trend",
     "SCr",
     "CrCl",
-    "WBC", 
+    "WBC Trend", 
+    "WBC",
     "B%",
+    "Hgb Trend",
     "Hgb",
+    "Plt Trend",
     "Plt",
-    "SBP",
-    "HR", 
-    "Gluc",
+    "SBP Trend",
+    "HR Trend", 
+    "Gluc Trend",
     # "SSI", 
+    "INR Trend",
     "INR",
     "PTT",
+    "UOP Trend",
     "UOP",
-    "Vol",
     "Avg",
     "Net",
     "Dialysis",
     "Drips",
     "Devices",
+    "Sod",
+    "Pot",
     "T.Bili",
     "AST",
     "ALT",
     # "Alerts",
-    "PCA",
-    "Doses",
     "A1c",
     "TSH",
+    "Chol",
+    "Trig",
+    "HDL",
     "LDL",
+    "PCA",
+    "Doses",
     "MRSA"
 )
 
 df <- data_dash %>% 
     left_join(sparks, by = "encntr_id") %>%
+    left_join(curr_vals, by = "encntr_id") %>%
+    left_join(max_vals, by = "encntr_id") %>%
+    left_join(sum_vals, by = "encntr_id") %>%
     left_join(drips, by = "encntr_id") %>%
     select(
         bed,
@@ -157,50 +220,70 @@ df <- data_dash %>%
         los,
         sofa,
         temperature,
-        tmax,
-        `serum creatinine`,
+        max_temperature,
         scr,
+        curr_scr,
         crcl,
         wbc,
+        curr_wbc,
         bands,
         hgb,
+        curr_hgb,
         platelet,
-        `systolic blood pressure`,
-        `heart rate`,
+        curr_platelet,
+        sbp,
+        hr,
         glucose,
         inr,
+        curr_inr,
         ptt,
-        `urine output`,
         uop,
+        sum_uop,
         uop_avg,
         net_io,
         dialysis,
         drip,
         iabp,
+        sodium,
+        potassium,
         tbili,
         ast,
         alt,
-        pca_doses,
-        pca_demands,
         a1c,
         tsh,
+        chol,
+        trig,
+        hdl,
         ldl,
+        pca_doses,
+        pca_demands,
         mrsa_pcr
     )
 
 df %>%
     datatable(
-        caption = paste0(
-            "Data updated: ", 
-            format(file.info(file_nm)$mtime, "%B %d, %Y at %I:%M %p")
+        # caption = paste0(
+        #     "Data updated: ", 
+        #     format(file.info(file_nm)$mtime, "%B %d, %Y at %I:%M %p")
+        # ),
+        caption = htmltools::tags$caption(
+            style = "caption-side: bottom",
+            paste0(
+                "Data updated: ", 
+                format(file.info(file_nm)$mtime, "%B %d, %Y at %I:%M %p")
+            )
         ),
         rownames = FALSE, 
         escape = FALSE,
         colnames = col_names,
-        extensions = "FixedHeader",
+        # extensions = "FixedHeader",
+        extensions = c("FixedColumns", "FixedHeader"),
         options = list(
             dom = "t",
+            # fixedColumns = TRUE,
+            fixedColumns = list(leftColumns = 2),
             fixedHeader = TRUE,
+            scrollX = TRUE,
             pageLength = 21,
             order = list(list(0, 'asc')),
             initComplete = JS(
@@ -213,8 +296,9 @@ df %>%
             )
         )
     ) %>%
-    formatRound(c("los", "tmax", "uop_avg", "a1c", "tsh", "inr"), 1) %>%
-    formatRound(c("crcl", "uop", "net_io", "ptt", "weight"), 0) %>%
+    formatRound(c("tsh", "curr_inr", "curr_scr"), 2) %>%
+    formatRound(c("los", "max_temperature", "uop_avg", "a1c", "potassium", "curr_wbc", "curr_hgb"), 1) %>%
+    formatRound(c("crcl", "sum_uop", "net_io", "ptt", "weight"), 0) %>%
     formatStyle(columns = c(1:ncol(df)), fontSize = "80%") %>%
     spk_add_deps()
 
