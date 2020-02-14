@@ -58,7 +58,7 @@ file_nm <- "U:/Data/patient_dashboard/dashboard_data_daily.xlsx"
 data_dash <- read_excel(file_nm, sheet="dashboard") %>%
     rename_all(tolower)
 
-data_spark <- read_excel(file_nm, sheet="sparklines") %>%
+data_events <- read_excel(file_nm, sheet="events") %>%
     rename_all(tolower)
 
 data_drips <- read_excel(file_nm, sheet="drips") %>%
@@ -67,7 +67,7 @@ data_drips <- read_excel(file_nm, sheet="drips") %>%
 ```
 
 ```{r sparklines}
-sparks <- data_spark %>%
+sparks <- data_events %>%
     mutate(
         hrs = difftime(
             event_datetime,
@@ -91,23 +91,52 @@ sparks <- data_spark %>%
         )
     ) %>%
     # pivot_wider(
-    #     names_from = event, 
+    #     names_from = event,
     #     values_from = result_val,
     #     names_prefix = "spark_"
     # )
     spread(event, result_val)
 ```
 
+```{r baseline_values}
+base_vals <- data_events %>%
+    filter(
+        event %in% c(
+            "hgba1c",
+            "chol",
+            "trig",
+            "hdl",
+            "ldl",
+            "tsh"
+        )
+    ) %>%
+    arrange(encntr_id, event, desc(event_datetime), desc(event_id)) %>%
+    distinct(encntr_id, event, .keep_all = TRUE) %>%
+    select(encntr_id, event, result_val) %>%
+    pivot_wider(
+        names_from = event, 
+        values_from = result_val,
+        names_prefix = "base_"
+    )
+```
+
 ```{r current_values}
-curr_vals <- data_spark %>%
+curr_vals <- data_events %>%
     filter(
         event %in% c(
             "temperature",
             "scr",
             "wbc",
+            # "bands",
             "hgb",
             "platelet",
-            "inr"
+            "inr",
+            "sodium",
+            "potassium",
+            "ptt",
+            "alt",
+            "ast",
+            "tbili"
         )
     ) %>%
     arrange(encntr_id, event, desc(event_datetime), desc(event_id)) %>%
@@ -121,7 +150,7 @@ curr_vals <- data_spark %>%
 ```
 
 ```{r max_values}
-max_vals <- data_spark %>%
+max_vals <- data_events %>%
     filter(event == "temperature") %>%
     group_by(encntr_id, event) %>%
     summarize_at("result_val", max, na.rm = TRUE) %>%
@@ -133,7 +162,7 @@ max_vals <- data_spark %>%
 ```
 
 ```{r sum_values}
-sum_vals <- data_spark %>%
+sum_vals <- data_events %>%
     filter(event == "uop") %>%
     group_by(encntr_id, event) %>%
     summarize_at("result_val", sum, na.rm = TRUE) %>%
@@ -167,6 +196,7 @@ col_names <- c(
     "SCr Trend",
     "SCr",
     "CrCl",
+    "Dialysis",
     "WBC Trend", 
     "WBC",
     "B%",
@@ -176,6 +206,8 @@ col_names <- c(
     "Plt",
     "SBP Trend",
     "HR Trend", 
+    "Drips",
+    "Devices",
     "Gluc Trend",
     # "SSI", 
     "INR Trend",
@@ -185,9 +217,6 @@ col_names <- c(
     "UOP",
     "Avg",
     "Net",
-    "Dialysis",
-    "Drips",
-    "Devices",
     "Sod",
     "Pot",
     "T.Bili",
@@ -207,6 +236,7 @@ col_names <- c(
 
 df <- data_dash %>% 
     left_join(sparks, by = "encntr_id") %>%
+    left_join(base_vals, by = "encntr_id") %>%
     left_join(curr_vals, by = "encntr_id") %>%
     left_join(max_vals, by = "encntr_id") %>%
     left_join(sum_vals, by = "encntr_id") %>%
@@ -224,6 +254,7 @@ df <- data_dash %>%
         scr,
         curr_scr,
         crcl,
+        dialysis,
         wbc,
         curr_wbc,
         bands,
@@ -233,28 +264,27 @@ df <- data_dash %>%
         curr_platelet,
         sbp,
         hr,
+        drip,
+        iabp,
         glucose,
         inr,
         curr_inr,
-        ptt,
+        curr_ptt,
         uop,
         sum_uop,
         uop_avg,
         net_io,
-        dialysis,
-        drip,
-        iabp,
-        sodium,
-        potassium,
-        tbili,
-        ast,
-        alt,
-        a1c,
-        tsh,
-        chol,
-        trig,
-        hdl,
-        ldl,
+        curr_sodium,
+        curr_potassium,
+        curr_tbili,
+        curr_ast,
+        curr_alt,
+        base_hgba1c,
+        base_tsh,
+        base_chol,
+        base_trig,
+        base_hdl,
+        base_ldl,
         pca_doses,
         pca_demands,
         mrsa_pcr
@@ -296,9 +326,9 @@ df %>%
             )
         )
     ) %>%
-    formatRound(c("tsh", "curr_inr", "curr_scr"), 2) %>%
-    formatRound(c("los", "max_temperature", "uop_avg", "a1c", "potassium", "curr_wbc", "curr_hgb"), 1) %>%
-    formatRound(c("crcl", "sum_uop", "net_io", "ptt", "weight"), 0) %>%
+    formatRound(c("base_tsh", "curr_inr", "curr_scr"), 2) %>%
+    formatRound(c("los", "max_temperature", "uop_avg", "base_hgba1c", "curr_potassium", "curr_wbc", "curr_hgb"), 1) %>%
+    formatRound(c("crcl", "sum_uop", "net_io", "curr_ptt", "weight"), 0) %>%
     formatStyle(columns = c(1:ncol(df)), fontSize = "80%") %>%
     spk_add_deps()
 
