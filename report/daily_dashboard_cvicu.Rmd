@@ -209,7 +209,7 @@ col_names <- c(
     "Drips",
     "Devices",
     "Gluc Trend",
-    # "SSI", 
+    "SSI",
     "INR Trend",
     "INR",
     "PTT",
@@ -230,7 +230,7 @@ col_names <- c(
     "HDL",
     "LDL",
     "PCA",
-    "Doses",
+    "Demands",
     "MRSA"
 )
 
@@ -267,6 +267,7 @@ df <- data_dash %>%
         drip,
         iabp,
         glucose,
+        ssi,
         inr,
         curr_inr,
         curr_ptt,
