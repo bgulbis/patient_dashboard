@@ -56,7 +56,8 @@ ref_normals <- tibble(
 file_nm <- "U:/Data/patient_dashboard/dashboard_data_daily.xlsx"
 
 data_dash <- read_excel(file_nm, sheet="dashboard") %>%
-    rename_all(tolower)
+    rename_all(tolower) %>%
+    mutate_at("bands", list(~ . / 100))
 
 data_events <- read_excel(file_nm, sheet="events") %>%
     rename_all(tolower)
@@ -199,7 +200,7 @@ col_names <- c(
     "Dialysis",
     "WBC Trend", 
     "WBC",
-    "B%",
+    "Bands",
     "Hgb Trend",
     "Hgb",
     "Plt Trend",
@@ -222,7 +223,6 @@ col_names <- c(
     "T.Bili",
     "AST",
     "ALT",
-    # "Alerts",
     "A1c",
     "TSH",
     "Chol",
@@ -329,11 +329,17 @@ df %>%
     ) %>%
     formatRound(c("base_tsh", "curr_inr", "curr_scr"), 2) %>%
     formatRound(c("los", "max_temperature", "uop_avg", "base_hgba1c", "curr_potassium", "curr_wbc", "curr_hgb"), 1) %>%
-    formatRound(c("crcl", "sum_uop", "net_io", "curr_ptt", "weight"), 0) %>%
+    formatRound(c("crcl", "sum_uop", "net_io", "curr_ptt", "weight", "curr_ast", "curr_alt"), 0) %>%
+    formatPercentage("bands", 0) %>%
+    formatStyle("crcl", fontWeight = styleInterval(29, c("bold", "normal"))) %>%
+    formatStyle("curr_sodium", fontWeight = styleInterval(c(131, 149), c("bold", "normal", "bold"))) %>%
+    formatStyle("curr_potassium", fontWeight = styleInterval(c(3.5, 5.5), c("bold", "normal", "bold"))) %>%
+    formatStyle("curr_tbili", fontWeight = styleInterval(2, c("normal", "bold"))) %>%
+    formatStyle(c("curr_ast", "curr_alt"), fontWeight = styleInterval(75, c("normal", "bold"))) %>%
+    formatStyle("base_hgba1c", fontWeight = styleInterval(8, c("normal", "bold"))) %>%
+    formatStyle("base_tsh", fontWeight = styleInterval(c(0.4, 3.75), c("bold", "normal", "bold"))) %>%
     formatStyle(columns = c(1:ncol(df)), fontSize = "80%") %>%
     spk_add_deps()
-
-
 
 ```
 
