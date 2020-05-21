@@ -55,6 +55,10 @@ ref_normals <- tibble(
 ```{r read_data}
 file_nm <- "U:/Data/patient_dashboard/dashboard_data_daily.xlsx"
 
+if (as_date(file.info(file_nm)$mtime) < today()) {
+    warning("Data from previous day")
+}
+
 data_dash <- read_excel(file_nm, sheet="dashboard") %>%
     rename_all(tolower) %>%
     mutate_at("bands", list(~ . / 100))
