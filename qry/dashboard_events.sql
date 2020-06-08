@@ -110,6 +110,7 @@ WITH CURR_PTS AS (
 			172563306, -- Temperature Esophageal
 			172563327, -- Temperature Brain
 			263779626, -- Temperature Bladder
+			119922861, -- Temperature Temporal Scanner
 			10679282 -- Temperature Sensor
 		)
 		AND CLINICAL_EVENT.EVENT_END_DT_TM >= pi_to_gmt(SYSDATE - 1, 'America/Chicago')
