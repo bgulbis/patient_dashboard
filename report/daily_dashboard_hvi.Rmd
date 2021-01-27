@@ -318,12 +318,17 @@ make_table <- function(x) {
             colnames = col_names,
             # extensions = "FixedHeader",
             extensions = c("FixedColumns", "FixedHeader"),
+            fillContainer = TRUE,
             options = list(
                 dom = "t",
                 # fixedColumns = TRUE,
+                # autoWidth = TRUE,
                 fixedColumns = list(leftColumns = 2),
                 fixedHeader = TRUE,
-                scrollX = TRUE,
+                # scrollX = TRUE,
+                # scrollY=TRUE,
+                scrollY="600px",
+                scrollX="300px",
                 pageLength = 21,
                 order = list(list(0, 'asc')),
                 initComplete = JS(
