@@ -1,12 +1,15 @@
 ---
 title: "HVI Patient Dashboard"
 knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = 'U:', output_file = 'dashboard_hvi.html') })
-output: flexdashboard::flex_dashboard
+output: 
+    flexdashboard::flex_dashboard:
+        vertical_layout: scroll
 ---
 
 <style>
     body .main-container {
         max-width: 100%;
+        max-height: 100%;
     }
 </style>
 
@@ -325,10 +328,10 @@ make_table <- function(x) {
                 # autoWidth = TRUE,
                 fixedColumns = list(leftColumns = 2),
                 fixedHeader = TRUE,
-                # scrollX = TRUE,
-                # scrollY=TRUE,
-                scrollY="600px",
-                scrollX="300px",
+                scrollX = TRUE,
+                # scrollY = TRUE,
+                # scrollY = "600px",
+                # scrollX = "300px",
                 pageLength = 21,
                 order = list(list(0, 'asc')),
                 initComplete = JS(
@@ -358,10 +361,13 @@ make_table <- function(x) {
 
 ```
 
-Column {.tabset}
+CVICU
+=======================================================================
+
+Column 
 -----------------------------------------------------------------------
 
-### CVICU
+### CVICU {.no-title}
 
 ```{r}
 df %>%
@@ -369,7 +375,13 @@ df %>%
     make_table()
 ```
 
-### CCU
+CCU
+=======================================================================
+
+Column 
+-----------------------------------------------------------------------
+
+### CCU {.no-title}
 
 ```{r}
 df %>%
