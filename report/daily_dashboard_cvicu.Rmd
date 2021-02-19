@@ -325,8 +325,9 @@ make_table <- function(x) {
                 # fixedColumns = TRUE,
                 fixedColumns = list(leftColumns = 2),
                 fixedHeader = TRUE,
-                scrollX = TRUE,
-                pageLength = 50,
+                # scrollX = "300px",
+                # scrollY = TRUE,
+                pageLength = 21,
                 order = list(list(0, 'asc')),
                 initComplete = JS(
                     "function(settings, json) {",
