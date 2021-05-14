@@ -326,6 +326,7 @@ make_table <- function(x) {
                 fixedColumns = list(leftColumns = 2),
                 fixedHeader = TRUE,
                 # scrollX = "300px",
+                # scrollX = TRUE,
                 # scrollY = TRUE,
                 pageLength = 21,
                 order = list(list(0, 'asc')),
