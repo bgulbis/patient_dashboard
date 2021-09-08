@@ -177,6 +177,7 @@ WITH CURR_PTS AS (
 			17664566, -- Urine Voided
 			699895758, -- Urine Voided Volume
 			134426203, -- Urine Output Initial (mL)
+			3422083713, -- External Catheter Output Volume
 			700105361, -- Indwelling Cath Output Volume:
 			700105503, -- Indwelling Cath Urine Output Initial:
 			700168898 -- Intermittent Catheter Output Volume
