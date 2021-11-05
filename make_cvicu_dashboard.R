@@ -4,5 +4,5 @@ rmarkdown::render(
     output_dir = "/Users/briangulbis/Share/U"
 )
 
-# mount_smbfs //brgulbis@tmcisilon/user$/user1/brgulbis /Users/briangulbis/Share/U
-# mount_smbfs //brgulbis@mh.org/public /Users/briangulbis/Share/W
+# mount_smbfs //brgulbis@tmcisilon.mh.org/user$/user1/brgulbis /Users/briangulbis/Share/U
+# mount_smbfs //brgulbis@mhdc01.mh.org/public /Users/briangulbis/Share/W
