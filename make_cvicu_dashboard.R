@@ -4,6 +4,3 @@ rmarkdown::render(
     # output_dir = "/Users/briangulbis/Share/U"
     output_dir = "/Volumes/brgulbis/"
 )
-
-# mount_smbfs //brgulbis@tmcisilon.mh.org/user$/user1/brgulbis /Users/briangulbis/Share/U
-# mount_smbfs //brgulbis@mh.org/public /Users/briangulbis/Share/W
