@@ -1,6 +1,5 @@
 ---
 title: "CCU Patient Dashboard"
-knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = 'U:', output_file = 'dashboard_ccu.html') })
 output: html_document
 ---
 
