@@ -360,4 +360,6 @@ make_table <- function(x) {
 df %>%
     filter(nurse_unit == "HH CCU") %>%
     make_table()
+
+message(paste("Data updated:", format(file.info(file_nm)$mtime, "%B %d, %Y at %I:%M %p")))
 ```
