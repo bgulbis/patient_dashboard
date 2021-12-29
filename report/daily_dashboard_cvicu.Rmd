@@ -10,12 +10,6 @@ output: html_document
 </style>
 
 ```{r setup, include=FALSE}
-
-# knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = 'U:', output_file = 'dashboard_cvicu.html') })
-
-# mount_smbfs //brgulbis@tmcisilon/user$/user1/brgulbis /Users/briangulbis/Share/U
-# mount_smbfs //brgulbis@mh.org/public /Users/briangulbis/Share/W
-
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 library(tidyverse)
 library(readxl)
