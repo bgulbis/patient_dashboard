@@ -15,8 +15,14 @@ rmarkdown::render(
     output_dir = f
 )
 
+# rmarkdown::render(
+#     input = "report/daily_dashboard_ccu.Rmd",
+#     output_file = "dashboard_ccu.html",
+#     output_dir = f
+# )
+
 rmarkdown::render(
-    input = "report/daily_dashboard_ccu.Rmd",
+    input = "report/daily_dashboard_hfimu.Rmd",
     output_file = "dashboard_ccu.html",
     output_dir = f
 )
