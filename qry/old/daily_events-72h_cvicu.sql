@@ -27,7 +27,8 @@ WHERE
 			33044, -- Platelet
 			33552, -- Bili Total
 			32197, -- Lactic Acid Lvl
-			240922314 -- POC A LA)
+			240922314 -- POC A LA
+		)
         AND CLINICAL_EVENT.EVENT_CD = CV_EVENT.CODE_VALUE
         AND CLINICAL_EVENT.RESULT_UNITS_CD = CV_RESULT_UNITS.CODE_VALUE
         AND CLINICAL_EVENT.EVENT_END_DT_TM >= pi_to_gmt(SYSDATE - 3, pi_time_zone(2, @Variable('BOUSER')))
