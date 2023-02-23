@@ -26,3 +26,11 @@ rmarkdown::render(
     output_file = "dashboard_ccu.html",
     output_dir = f
 )
+
+if (as_date(file.info(file_nm)$mtime) < today()) {
+    warning("Data from previous day")
+}
+
+file_nm <- paste0(f, "Data/patient_dashboard/dashboard_data_daily.xlsx")
+
+message(paste("Data updated:", format(file.info(file_nm)$mtime, "%B %d, %Y at %I:%M %p")))
