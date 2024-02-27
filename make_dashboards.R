@@ -9,17 +9,17 @@ if (!dir.exists(f)) {
     stop("Network drive not available.")
 }
 
-# rmarkdown::render(
-#     input = "report/daily_dashboard_cvicu.Rmd",
-#     output_file = "dashboard_cvicu.html",
-#     output_dir = f
-# )
-
 rmarkdown::render(
-    input = "report/daily_dashboard_hfimu.Rmd",
+    input = "report/daily_dashboard_cvicu.Rmd",
     output_file = "dashboard_cvicu.html",
     output_dir = f
 )
+
+# rmarkdown::render(
+#     input = "report/daily_dashboard_hfimu.Rmd",
+#     output_file = "dashboard_cvicu.html",
+#     output_dir = f
+# )
 
 rmarkdown::render(
     input = "report/daily_dashboard_ccu.Rmd",

@@ -62,31 +62,31 @@ if (as_date(file.info(file_nm)$mtime) < today()) {
     warning("Data from previous day")
 }
 
-data_dash <- read_excel(file_nm, sheet="dashboard") %>%
-    rename_all(tolower) %>%
+data_dash <- read_excel(file_nm, sheet="dashboard") |>
+    rename_all(tolower) |>
     mutate_at("bands", list(~ . / 100))
 
-data_events <- read_excel(file_nm, sheet="events") %>%
+data_events <- read_excel(file_nm, sheet="events") |>
     rename_all(tolower)
 
-data_drips <- read_excel(file_nm, sheet="drips") %>%
+data_drips <- read_excel(file_nm, sheet="drips") |>
     rename_all(tolower)
 
 ```
 
 ```{r sparklines}
-sparks <- data_events %>%
+sparks <- data_events |>
     mutate(
         hrs = difftime(
             event_datetime,
             now(),
             units = "hours"
         )
-    ) %>%
-    left_join(ref_normals, by = "event") %>%
-    add_count(encntr_id, event) %>%
-    filter(n > 1) %>%
-    group_by(encntr_id, event) %>%
+    ) |>
+    left_join(ref_normals, by = "event") |>
+    add_count(encntr_id, event) |>
+    filter(n > 1) |>
+    group_by(encntr_id, event) |>
     summarize_at(
         "result_val", 
         list(
@@ -97,7 +97,7 @@ sparks <- data_events %>%
                 nl_max = normal_max
             )
         )
-    ) %>%
+    ) |>
     # pivot_wider(
     #     names_from = event,
     #     values_from = result_val,
@@ -107,7 +107,7 @@ sparks <- data_events %>%
 ```
 
 ```{r baseline_values}
-base_vals <- data_events %>%
+base_vals <- data_events |>
     filter(
         event %in% c(
             "hgba1c",
@@ -117,10 +117,10 @@ base_vals <- data_events %>%
             "ldl",
             "tsh"
         )
-    ) %>%
-    arrange(encntr_id, event, desc(event_datetime), desc(event_id)) %>%
-    distinct(encntr_id, event, .keep_all = TRUE) %>%
-    select(encntr_id, event, result_val) %>%
+    ) |>
+    arrange(encntr_id, event, desc(event_datetime), desc(event_id)) |>
+    distinct(encntr_id, event, .keep_all = TRUE) |>
+    select(encntr_id, event, result_val) |>
     pivot_wider(
         names_from = event, 
         values_from = result_val,
@@ -129,39 +129,41 @@ base_vals <- data_events %>%
 ```
 
 ```{r current_values}
-curr_vals <- data_events %>%
-    filter(
-        event %in% c(
-            "temperature",
-            "scr",
-            "wbc",
-            # "bands",
-            "hgb",
-            "platelet",
-            "inr",
-            "sodium",
-            "potassium",
-            "ptt",
-            "alt",
-            "ast",
-            "tbili"
-        )
-    ) %>%
-    arrange(encntr_id, event, desc(event_datetime), desc(event_id)) %>%
-    distinct(encntr_id, event, .keep_all = TRUE) %>%
-    select(encntr_id, event, result_val) %>%
+labs <- c(
+    "temperature",
+    "scr",
+    "wbc",
+    # "bands",
+    "hgb",
+    "platelet",
+    "inr",
+    "sodium",
+    "potassium",
+    "ptt",
+    "alt",
+    "ast",
+    "tbili"
+)
+
+curr_vals <- data_events |>
+    filter(event %in% labs) |>
+    arrange(encntr_id, event, desc(event_datetime), desc(event_id)) |>
+    distinct(encntr_id, event, .keep_all = TRUE) |>
+    select(encntr_id, event, result_val) |>
+    mutate(across(event, \(x) factor(x, levels = labs))) |> 
     pivot_wider(
         names_from = event, 
         values_from = result_val,
+        names_expand = TRUE,
         names_prefix = "curr_"
     )
 ```
 
 ```{r max_values}
-max_vals <- data_events %>%
-    filter(event == "temperature") %>%
-    group_by(encntr_id, event) %>%
-    summarize_at("result_val", max, na.rm = TRUE) %>%
+max_vals <- data_events |>
+    filter(event == "temperature") |>
+    group_by(encntr_id, event) |>
+    summarize_at("result_val", max, na.rm = TRUE) |>
     pivot_wider(
         names_from = event, 
         values_from = result_val,
@@ -170,10 +172,10 @@ max_vals <- data_events %>%
 ```
 
 ```{r sum_values}
-sum_vals <- data_events %>%
-    filter(event == "uop") %>%
-    group_by(encntr_id, event) %>%
-    summarize_at("result_val", sum, na.rm = TRUE) %>%
+sum_vals <- data_events |>
+    filter(event == "uop") |>
+    group_by(encntr_id, event) |>
+    summarize_at("result_val", sum, na.rm = TRUE) |>
     pivot_wider(
         names_from = event, 
         values_from = result_val,
@@ -182,9 +184,9 @@ sum_vals <- data_events %>%
 ```
 
 ```{r drips}
-drips <- data_drips %>%
-    mutate(drip = paste(str_extract(medication, "^.{3}"), rate)) %>%
-    group_by(encntr_id) %>%
+drips <- data_drips |>
+    mutate(drip = paste(str_extract(medication, "^.{3}"), rate)) |>
+    group_by(encntr_id) |>
     summarize_at("drip", str_c, collapse = ", ")
 
 ```
@@ -242,13 +244,13 @@ col_names <- c(
     "COVID-19"
 )
 
-df <- data_dash %>% 
-    left_join(sparks, by = "encntr_id") %>%
-    left_join(base_vals, by = "encntr_id") %>%
-    left_join(curr_vals, by = "encntr_id") %>%
-    left_join(max_vals, by = "encntr_id") %>%
-    left_join(sum_vals, by = "encntr_id") %>%
-    left_join(drips, by = "encntr_id") %>%
+df <- data_dash |> 
+    left_join(sparks, by = "encntr_id") |>
+    left_join(base_vals, by = "encntr_id") |>
+    left_join(curr_vals, by = "encntr_id") |>
+    left_join(max_vals, by = "encntr_id") |>
+    left_join(sum_vals, by = "encntr_id") |>
+    left_join(drips, by = "encntr_id") |>
     select(
         nurse_unit,
         bed,
@@ -302,8 +304,8 @@ df <- data_dash %>%
     )
 
 make_table <- function(x) {
-    x %>%
-        select(-nurse_unit) %>%
+    x |>
+        select(-nurse_unit) |>
         datatable(
             # caption = paste0(
             #     "Data updated: ", 
@@ -342,27 +344,27 @@ make_table <- function(x) {
                     "function(){ HTMLWidgets.staticRender(); }"
                 )
             )
-        ) %>%
-        formatRound(c("base_tsh", "curr_inr", "curr_scr"), 2) %>%
-        formatRound(c("los", "max_temperature", "uop_avg", "base_hgba1c", "curr_potassium", "curr_wbc", "curr_hgb"), 1) %>%
-        formatRound(c("crcl", "sum_uop", "net_io", "curr_ptt", "weight", "curr_ast", "curr_alt"), 0) %>%
-        formatPercentage("bands", 0) %>%
-        formatStyle("crcl", fontWeight = styleInterval(29, c("bold", "normal"))) %>%
-        formatStyle("curr_sodium", fontWeight = styleInterval(c(131, 149), c("bold", "normal", "bold"))) %>%
-        formatStyle("curr_potassium", fontWeight = styleInterval(c(3.5, 5.5), c("bold", "normal", "bold"))) %>%
-        formatStyle("curr_tbili", fontWeight = styleInterval(2, c("normal", "bold"))) %>%
-        formatStyle(c("curr_ast", "curr_alt"), fontWeight = styleInterval(75, c("normal", "bold"))) %>%
-        formatStyle("base_hgba1c", fontWeight = styleInterval(8, c("normal", "bold"))) %>%
-        formatStyle("base_tsh", fontWeight = styleInterval(c(0.4, 3.75), c("bold", "normal", "bold"))) %>%
-        formatStyle(columns = c(1:ncol(df)), fontSize = "80%") %>%
+        ) |>
+        formatRound(c("base_tsh", "curr_inr", "curr_scr"), 2) |>
+        formatRound(c("los", "max_temperature", "uop_avg", "base_hgba1c", "curr_potassium", "curr_wbc", "curr_hgb"), 1) |>
+        formatRound(c("crcl", "sum_uop", "net_io", "curr_ptt", "weight", "curr_ast", "curr_alt"), 0) |>
+        formatPercentage("bands", 0) |>
+        formatStyle("crcl", fontWeight = styleInterval(29, c("bold", "normal"))) |>
+        formatStyle("curr_sodium", fontWeight = styleInterval(c(131, 149), c("bold", "normal", "bold"))) |>
+        formatStyle("curr_potassium", fontWeight = styleInterval(c(3.5, 5.5), c("bold", "normal", "bold"))) |>
+        formatStyle("curr_tbili", fontWeight = styleInterval(2, c("normal", "bold"))) |>
+        formatStyle(c("curr_ast", "curr_alt"), fontWeight = styleInterval(75, c("normal", "bold"))) |>
+        formatStyle("base_hgba1c", fontWeight = styleInterval(8, c("normal", "bold"))) |>
+        formatStyle("base_tsh", fontWeight = styleInterval(c(0.4, 3.75), c("bold", "normal", "bold"))) |>
+        formatStyle(columns = c(1:ncol(df)), fontSize = "80%") |>
         spk_add_deps()
 }
 
 ```
 
 ```{r}
-df %>%
-    filter(nurse_unit == "HH CCU") %>%
+df |>
+    filter(nurse_unit == "HH CCU") |>
     make_table()
 
 message(paste("Data updated:", format(file.info(file_nm)$mtime, "%B %d, %Y at %I:%M %p")))
