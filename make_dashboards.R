@@ -18,7 +18,7 @@ if (Sys.info()['sysname'] == "Windows") {
 }
 
 if (as_date(file.info(file_nm)$mtime) < today()) {
-    warning("Data from previous day")
+    stop("Data from previous day")
 } else if (as_datetime(file.info(paste0(f, "dashboard_cvicu.html"))$mtime) > as_datetime(file.info(file_nm)$mtime)) {
     stop(paste("Dashboard data out-of-date. Last updated:", format(file.info(file_nm)$mtime, "%B %d, %Y at %I:%M %p")))
 }
