@@ -29,16 +29,34 @@ rmarkdown::render(
     output_dir = f
 )
 
-# rmarkdown::render(
-#     input = "report/daily_dashboard_hfimu.Rmd",
-#     output_file = "dashboard_cvicu.html",
-#     output_dir = f
-# )
-
 rmarkdown::render(
     input = "report/daily_dashboard_ccu.Rmd",
     output_file = "dashboard_ccu.html",
     output_dir = f
 )
+
+rmarkdown::render(
+    input = "report/daily_dashboard_hficu.Rmd",
+    output_file = "dashboard_hficu.html",
+    output_dir = f
+)
+
+# rmarkdown::render(
+#     input = "report/daily_dashboard_cvimu.Rmd",
+#     output_file = "dashboard_cvimu.html",
+#     output_dir = f
+# )
+
+# rmarkdown::render(
+#     input = "report/daily_dashboard_cimu.Rmd",
+#     output_file = "dashboard_cimu.html",
+#     output_dir = f
+# )
+
+# rmarkdown::render(
+#     input = "report/daily_dashboard_hfimu.Rmd",
+#     output_file = "dashboard_hfimu.html",
+#     output_dir = f
+# )
 
 message(paste("Data updated:", format(file.info(file_nm)$mtime, "%B %d, %Y at %I:%M %p")))

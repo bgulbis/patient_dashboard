@@ -1,5 +1,5 @@
 ---
-title: "HFIMU Patient Dashboard"
+title: "CVIMU Patient Dashboard"
 output: html_document
 ---
 
@@ -364,7 +364,7 @@ make_table <- function(x) {
 
 ```{r}
 df |>
-    filter(nurse_unit == "HH HFIM") |>
+    filter(nurse_unit == "HH CVIMU") |>
     make_table()
 
 message(paste("Data updated:", format(file.info(file_nm)$mtime, "%B %d, %Y at %I:%M %p")))
